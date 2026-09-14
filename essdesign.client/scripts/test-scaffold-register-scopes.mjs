@@ -48,8 +48,12 @@ const visible = async names => {
 try {
  await page.goto(baseURL+'/tests/fixtures/scaffold-register.html?scope=1');
  await visible(['First scaffold']);
+ assert.equal(await page.locator('thead th').count(),8);
+ assert.equal(await page.getByRole('columnheader',{name:'SITE',exact:true}).count(),0);
  await choose('Project','All Sites');
  await visible(['First scaffold','Second scaffold']);
+ assert.deepEqual(await page.locator('thead th').allTextContents(),['SITE','SCAFFOLD','STATUS','ACTIVE TIME','DESIGN DRAWING','HANDOVER CERTIFICATE','SCAFF-TAG','QR LABEL','LAST UPDATED']);
+ assert.equal(await page.locator('tbody tr').filter({hasText:'First scaffold'}).locator('td').first().innerText(),'Test Project');
  assert.equal(await page.getByRole('button',{name:'Add scaffold',exact:true}).isDisabled(),true);
  await page.reload();
  await visible(['First scaffold','Second scaffold']);
@@ -58,9 +62,14 @@ try {
  await visible(['First scaffold','Second scaffold']);
  await choose('Builder','All Builders');
  await visible(['First scaffold','Second scaffold','Other scaffold']);
- assert.equal(await page.locator('.scaffold-register-site-context').count(),3);
+ assert.deepEqual((await page.locator('thead th').allTextContents()).slice(0,3),['BUILDER','SITE','SCAFFOLD']);
+ assert.equal(await page.locator('thead th').count(),10);
+ assert.deepEqual((await page.locator('tbody tr').filter({hasText:'Other scaffold'}).locator('td').allTextContents()).slice(0,3),['Other Builder','Test Project','Other scaffold']);
+ await page.screenshot({path:'/tmp/ess-scaffold-context-columns.png'});
  await choose('Project','Test Project — Other Builder');
  await visible(['Other scaffold']);
+ assert.equal(await page.locator('thead th').count(),8);
+ assert.equal(await page.getByRole('columnheader',{name:'BUILDER',exact:true}).count(),0);
  assert.equal(await page.getByRole('button',{name:'Add scaffold',exact:true}).isEnabled(),true);
  await choose('Project','All Sites');
  await visible(['First scaffold','Second scaffold','Other scaffold']);
@@ -75,6 +84,7 @@ try {
  await visible(['First scaffold','Second scaffold']);
  await choose('Project','Empty Site');
  await visible([]);
+ assert.equal(await page.locator('td.scaffold-register-empty-cell').getAttribute('colspan'),'8');
  await choose('Project','Test Project');
  await visible(['First scaffold']);
  assert.deepEqual(errors,[]);

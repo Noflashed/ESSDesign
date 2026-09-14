@@ -294,7 +294,7 @@
 
 .scaffold-register-table {
     width: 100%;
-    min-width: 1180px;
+    min-width: calc(1180px + var(--context-width, 0px));
     border-collapse: separate;
     border-spacing: 0;
     table-layout: fixed;
@@ -390,14 +390,14 @@
     min-height: 180px;
 }
 
-.scaffold-register-table th:nth-child(1) { width: 14%; }
-.scaffold-register-table th:nth-child(2) { width: 10%; }
-.scaffold-register-table th:nth-child(3) { width: 12%; }
-.scaffold-register-table th:nth-child(4) { width: 17%; }
-.scaffold-register-table th:nth-child(5) { width: 16%; }
-.scaffold-register-table th:nth-child(6) { width: 13%; }
-.scaffold-register-table th:nth-child(7) { width: 8%; }
-.scaffold-register-table th:nth-child(8) { width: 10%; }
+.scaffold-register-table .scaffold-register-column-scaffold { width: calc(var(--column-base, 100%) * 0.14); }
+.scaffold-register-table .scaffold-register-column-status { width: calc(var(--column-base, 100%) * 0.1); }
+.scaffold-register-table .scaffold-register-column-active-time { width: calc(var(--column-base, 100%) * 0.12); }
+.scaffold-register-table .scaffold-register-column-drawing { width: calc(var(--column-base, 100%) * 0.17); }
+.scaffold-register-table .scaffold-register-column-handover { width: calc(var(--column-base, 100%) * 0.16); }
+.scaffold-register-table .scaffold-register-column-tag { width: calc(var(--column-base, 100%) * 0.13); }
+.scaffold-register-table .scaffold-register-column-qr { width: calc(var(--column-base, 100%) * 0.08); }
+.scaffold-register-table .scaffold-register-column-updated { width: calc(var(--column-base, 100%) * 0.1); }
 
 .scaffold-register-table th:last-child,
 .scaffold-register-table td:last-child {
@@ -729,10 +729,5 @@
     .scaffold-register-dialog-actions button,
     .scaffold-register-delete-dialog button { transition: none; }
 }
-.scaffold-register-site-context {
-    display: block;
-    margin-top: 4px;
-    color: var(--text-secondary, #64748b);
-    font-size: 11px;
-    white-space: normal;
-}
+
+.scaffold-register-table .scaffold-register-context-column { width: 170px; }

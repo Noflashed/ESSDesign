@@ -15,7 +15,7 @@ await page.route('**/*', route => {
     const url = new URL(route.request().url());
     if (url.pathname === '/fixture/forms') {
         const records = empty ? [] : Array.from({ length: 40 }, (_, index) => ({
-            id: `record-${index}`, scaffoldName: `North elevation ${index + 1}`,
+            id: `record-${index}`, builderId: 'builder-test', projectId: 'project-test', scaffoldName: `North elevation ${index + 1}`,
             updatedAt: '2026-09-09T00:00:00Z',
             drawingDocumentId: index === 0 ? 'drawing-1' : '',
             drawingDocumentType: 'ess',

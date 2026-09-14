@@ -285,6 +285,9 @@ export default function ScaffoldRegisterPage({
     const scopeProjects = useMemo(() => projects.filter(project => !project.isAll
         && (selectedProject?.isAll || project.id === selectedProject?.id)), [projects, selectedProject]);
     const hasSpecificSite = Boolean(selectedProject && !selectedProject.isAll);
+    const showSiteColumn = !hasSpecificSite;
+    const showBuilderColumn = showSiteColumn && selectedBuilderId === ALL_SCOPE;
+    const contextColumnCount = Number(showSiteColumn) + Number(showBuilderColumn);
     const paramsForProject = project => ({
         builderId: project?.builderId || '',
         builderName: builders.find(builder => builder.id === project?.builderId)?.name || '',
@@ -672,7 +675,7 @@ export default function ScaffoldRegisterPage({
                         <span>Select a builder and project to view the Scaffold Register.</span>
                     </div>
                 ) : (
-                    <table className="scaffold-register-table" aria-label="Scaffold register">
+                    <table className="scaffold-register-table" aria-label="Scaffold register" style={{'--context-width': `${contextColumnCount * 170}px`, '--column-base': contextColumnCount ? '1180px' : '100%'}}>
                         <caption className="scaffold-register-add-row">
                             <button type="button" className="scaffold-register-add" disabled={mutationBusy || !hasSpecificSite}
                                 title={hasSpecificSite ? 'Add scaffold' : 'Select a specific site to add a scaffold'}
@@ -682,20 +685,22 @@ export default function ScaffoldRegisterPage({
                         </caption>
                         <thead>
                             <tr>
-                                <th>SCAFFOLD</th>
-                                <th>STATUS</th>
-                                <th>ACTIVE TIME</th>
-                                <th>DESIGN DRAWING</th>
-                                <th>HANDOVER CERTIFICATE</th>
-                                <th>SCAFF-TAG</th>
-                                <th>QR LABEL</th>
-                                <th>LAST UPDATED</th>
+                                {showBuilderColumn && <th className="scaffold-register-context-column" scope="col">BUILDER</th>}
+                                {showSiteColumn && <th className="scaffold-register-context-column" scope="col">SITE</th>}
+                                <th className="scaffold-register-column-scaffold">SCAFFOLD</th>
+                                <th className="scaffold-register-column-status">STATUS</th>
+                                <th className="scaffold-register-column-active-time">ACTIVE TIME</th>
+                                <th className="scaffold-register-column-drawing">DESIGN DRAWING</th>
+                                <th className="scaffold-register-column-handover">HANDOVER CERTIFICATE</th>
+                                <th className="scaffold-register-column-tag">SCAFF-TAG</th>
+                                <th className="scaffold-register-column-qr">QR LABEL</th>
+                                <th className="scaffold-register-column-updated">LAST UPDATED</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredRecords.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="scaffold-register-empty-cell">
+                                    <td colSpan={8 + contextColumnCount} className="scaffold-register-empty-cell">
                                         <div className="scaffold-register-empty">
                                             <ListTree size={24} aria-hidden="true" />
                                             <span>{records.length ? 'No scaffolds match the current search.' : 'No scaffold records yet. Add a scaffold to get started.'}</span>
@@ -737,9 +742,9 @@ export default function ScaffoldRegisterPage({
                                             }
                                         }}
                                     >
-                                        <td><span className="scaffold-register-cell-value" title={item.scaffoldName}>{item.scaffoldName}</span>
-                                            {!hasSpecificSite && <small className="scaffold-register-site-context">{item.builderName} · {item.projectName}</small>}
-                                        </td>
+                                        {showBuilderColumn && <td title={item.builderName}>{item.builderName || '-'}</td>}
+                                        {showSiteColumn && <td title={item.projectName}>{item.projectName || '-'}</td>}
+                                        <td><span className="scaffold-register-cell-value" title={item.scaffoldName}>{item.scaffoldName}</span></td>
                                         <td>
                                             <span className={`scaffold-register-lifecycle-status is-${lifecycle.status}`}>
                                                 <span aria-hidden="true" />
