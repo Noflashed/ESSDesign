@@ -28,6 +28,7 @@ import {useFolders} from '../context/FolderContext';
 import {useAuth} from '../context/AuthContext';
 import {BorderRadius, Colors, FontSize, Spacing, getTheme} from '../theme/appTheme';
 import AppTopBar from '../components/AppTopBar';
+import ScaffTagInspectionHint from '../components/ScaffTagInspectionHint';
 import CompanyEntitySelector from '../components/CompanyEntitySelector';
 import SignaturePadModal, {SignaturePadStroke} from '../components/SignaturePadModal';
 import SideMenuDrawer from '../components/SideMenuDrawer';
@@ -206,6 +207,15 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
     })),
   });
   const isReadOnly = route.params.readOnly === true;
+  const [inspectionHintDismissed, setInspectionHintDismissed] = React.useState(false);
+  const nextInspectionIndex = form.inspectionRecords.findIndex(row => !row.date);
+  const nextInspectionDueDate = nextInspectionIndex < 0 ? '' : scaffoldInspectionDueDate(form.dateErected, nextInspectionIndex);
+  const showInspectionHint = Boolean(route.params.formId && !loading && !isReadOnly && !inspectionHintDismissed && nextInspectionDueDate);
+  React.useEffect(() => {
+    setInspectionHintDismissed(false);
+    return navigation.addListener?.('focus', () => setInspectionHintDismissed(false));
+  }, [navigation, route.params.formId]);
+
   const isScaffoldRegisterLinked = Boolean(scaffoldRegisterId.trim());
   const company = getCompanyEntity(form.companyEntityId);
   const inputEditableProps = isReadOnly ? {editable: false, selectTextOnFocus: false} : {};
@@ -624,6 +634,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
     if (isReadOnly) {
       return;
     }
+    setInspectionHintDismissed(true);
     const parts = getSydneyDateTimeParts();
     setForm(previous => {
       const inspectionRecords = [...previous.inspectionRecords];
@@ -954,6 +965,10 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
         />
       </View>
 
+      {showInspectionHint && (
+        <ScaffTagInspectionHint date={nextInspectionDueDate} onDismiss={() => setInspectionHintDismissed(true)} />
+      )}
+
       <ScrollView
         testID={usesIOSDocumentEditor ? 'ess-scaff-tag-stable-scroll-pager' : undefined}
         style={usesIOSDocumentEditor ? styles.iOSTagPager : undefined}
@@ -1211,7 +1226,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                               accessibilityRole="button"
                               accessibilityLabel={`Inspection ${index + 1} due ${dueDate}. Record inspection now`}
                               disabled={isReadOnly}
-                              style={styles.inspectionDueButton}
+                              style={[styles.inspectionDueButton, showInspectionHint && index === nextInspectionIndex && styles.inspectionDueHighlighted]}
                               onPress={() => autofillInspectionRow(index)}
                             >
                               <Text style={[styles.authCellText, styles.inspectionDueText]}>{dueDate}</Text>
@@ -1939,6 +1954,10 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    inspectionDueHighlighted: {
+      backgroundColor: '#E8F6EF',
+      borderRadius: 4,
     },
     inspectionDueText: {
       opacity: 0.55,
