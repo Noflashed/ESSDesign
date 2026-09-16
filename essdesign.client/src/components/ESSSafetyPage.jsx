@@ -440,6 +440,7 @@ export default function ESSSafetyPage() {
     const [activeTabKey, setActiveTabKey] = useState('scaff-tags');
     const sharingReplacesStatus = ['pre-starts', 'day-labour-variations'].includes(activeTabKey);
     const hasSeparateSharing = ['handover-certificates', 'scaff-tags'].includes(activeTabKey);
+    const sharingBeforeStatus = activeTabKey === 'handover-certificates';
     const [columnFilterMenu, setColumnFilterMenu] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [uploadedByFilter, setUploadedByFilter] = useState('all');
@@ -978,7 +979,7 @@ export default function ESSSafetyPage() {
                                 <span className="project-data-checkbox" aria-hidden="true" />
                                 <span>Document name</span>
                                 <span>{activeTab.refLabel}</span>
-                                {!sharingReplacesStatus && <span>{statusHeader}</span>}
+                                {sharingBeforeStatus ? <span className="project-data-sharing-cell">Form Shared</span> : !sharingReplacesStatus && <span>{statusHeader}</span>}
                                 <span>Uploaded</span>
                                 <span>
                                     <TableHeaderFilter
@@ -1000,7 +1001,7 @@ export default function ESSSafetyPage() {
                                     </TableHeaderFilter>
                                 </span>
                                 <span />
-                                {hasSeparateSharing && <span className="project-data-sharing-cell">Form Shared</span>}
+                                {hasSeparateSharing && (sharingBeforeStatus ? <span>{statusHeader}</span> : <span className="project-data-sharing-cell">Form Shared</span>)}
                                 {sharingReplacesStatus && <span className="project-data-sharing-cell">{statusHeader}</span>}
                             </div>
 
@@ -1045,7 +1046,7 @@ export default function ESSSafetyPage() {
                                                 <span title={document.name}>{document.name}</span>
                                             </span>
                                             <span>{document.ref}</span>
-                                            {!sharingReplacesStatus && <span><StatusChip status={document.status} /></span>}
+                                            {sharingBeforeStatus ? <span className="project-data-sharing-cell"><FormSharedCheckbox form={document.raw} /></span> : !sharingReplacesStatus && <span><StatusChip status={document.status} /></span>}
                                             <span>{formatDate(document.uploadedAt)}</span>
                                             <span>{document.uploadedBy}</span>
                                             <span
@@ -1062,7 +1063,7 @@ export default function ESSSafetyPage() {
                                             >
                                                 <MoreVertical size={17} />
                                             </span>
-                                            {(hasSeparateSharing || sharingReplacesStatus) && <span className="project-data-sharing-cell"><FormSharedCheckbox form={document.raw} /></span>}
+                                            {(hasSeparateSharing || sharingReplacesStatus) && (sharingBeforeStatus ? <span><StatusChip status={document.status} /></span> : <span className="project-data-sharing-cell"><FormSharedCheckbox form={document.raw} /></span>)}
                                         </button>
                                     ))}
                                 </div>
