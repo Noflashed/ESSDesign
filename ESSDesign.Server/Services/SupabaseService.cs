@@ -2704,7 +2704,6 @@ namespace ESSDesign.Server.Services
             // Linked date changes are written by database triggers, so the row
             // timestamp is authoritative for QR-page and PDF cache versions.
             details.UpdatedAt = row.UpdatedAt ?? details.UpdatedAt;
-            details.InspectionRecords = details.InspectionRecords.Take(10).ToList();
             return details;
         }
 

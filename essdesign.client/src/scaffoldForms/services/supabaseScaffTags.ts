@@ -800,7 +800,7 @@ export async function getScaffTagForm(
     checkOther: !!raw.checkOther,
     checkOtherText: raw.checkOtherText ?? '',
     inspectionRecords: Array.isArray(raw.inspectionRecords)
-      ? raw.inspectionRecords.slice(0, 10).map(row => ({
+      ? raw.inspectionRecords.map(row => ({
           date: row?.date ?? '',
           time: row?.time ?? '',
           competentPerson: row?.competentPerson ?? '',
@@ -867,7 +867,6 @@ export async function saveScaffTagForm(
     tagNumber = await allocateNextScaffTagNumber(form.builderId, form.projectId);
   }
   const inspectionRecords = (input.inspectionRecords ?? [])
-    .slice(0, 10)
     .map(row => stampInspectionRecord(row, savedAt));
   const latestInspectionRecord = [...inspectionRecords].reverse().find(record => inspectionHasContent(record));
   const latestInspectionAt = latestInspectionRecord?.inspectedAt || existing?.latestInspectionAt || '';

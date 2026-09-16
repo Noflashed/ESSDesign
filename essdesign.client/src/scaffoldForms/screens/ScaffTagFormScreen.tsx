@@ -1,3 +1,4 @@
+import {inspectionTableRows, complianceTableRows} from '../utils/scaffTagInspectionRows';
 import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/screens/ScaffTagFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
 import React from 'react';
@@ -207,6 +208,13 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
   });
   const isReadOnly = route.params.readOnly === true;
   const nextInspectionIndex = form.inspectionRecords.findIndex(row => !row.date);
+  const complianceRows = complianceTableRows(form.inspectionRecords);
+  React.useEffect(() => {
+    setForm(previous => {
+      const rows = inspectionTableRows(previous.inspectionRecords);
+      return rows === previous.inspectionRecords ? previous : {...previous, inspectionRecords: rows};
+    });
+  }, [form.inspectionRecords]);
 
   const isScaffoldRegisterLinked = Boolean(scaffoldRegisterId.trim());
   const company = getCompanyEntity(form.companyEntityId);
@@ -1103,7 +1111,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                       ).map(([label, value]) => (
                         <TouchableOpacity
                           key={value}
-                          style={styles.frontLoadRow}
+                          style={[styles.frontLoadRow, value === 'OTHER' && styles.frontLoadOtherRow]}
                           disabled={isReadOnly}
                           onPress={() => setForm(prev => ({...prev, loadRating: value}))}
                         >
@@ -1147,6 +1155,10 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                     <Text style={[styles.authHeaderCell, styles.authNameCell]}>NAME</Text>
                     <Text style={[styles.authHeaderCell, styles.authSignatureCell]}>SIGNATURE</Text>
                   </View>
+                  <ScrollView style={styles.inspectionRowsViewport} nestedScrollEnabled
+                    scrollEnabled={form.inspectionRecords.length > 10}
+                    showsVerticalScrollIndicator={form.inspectionRecords.length > 10}
+                    keyboardShouldPersistTaps="handled">
                   {form.inspectionRecords.map((row, index) => {
                     const isActive = inspectionRowHasContent(row);
                     return (
@@ -1210,6 +1222,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                       </View>
                     );
                   })}
+                  </ScrollView>
                 </View>
 
                 <View style={styles.frontCautionBand}>
@@ -1326,7 +1339,11 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                     <Text style={[styles.reverseHeaderCell, styles.reverseDateCell]}>DATE</Text>
                     <Text style={[styles.reverseHeaderCell, styles.reversePersonCell]}>NOTE</Text>
                   </View>
-                  {form.inspectionRecords.slice(0, 8).map((row, index) => (
+                  <ScrollView style={styles.complianceRowsViewport} nestedScrollEnabled
+                    scrollEnabled={complianceRows.length > 8}
+                    showsVerticalScrollIndicator={complianceRows.length > 8}
+                    keyboardShouldPersistTaps="handled">
+                  {complianceRows.map((row, index) => (
                     <View key={`row-${index}`} style={styles.reverseTableRow}>
                       <View style={[styles.reverseInputButton, styles.reverseDateCell]}>
                         <Text style={styles.reverseInputText}>{formatScaffoldDate(row.date || '')}</Text>
@@ -1342,6 +1359,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                       />
                     </View>
                   ))}
+                  </ScrollView>
                 </View>
 
                 <View style={[styles.reversePhotosPanel, usesIOSDocumentEditor && styles.iOSReversePhotosPanel]}>
@@ -1710,25 +1728,22 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       lineHeight: 15,
       fontWeight: '900',
     },
+    inspectionRowsViewport: {maxHeight: 390},
+    complianceRowsViewport: {maxHeight: 336},
+    frontLoadOtherRow: {width: '100%'},
     tagLoadPanel: {
-      marginTop: 6,
-      paddingTop: 8,
-      borderTopWidth: 1,
-      borderTopColor: '#B8D9C7',
-      flexDirection: 'row',
-      gap: 10,
+      marginTop: 6, paddingTop: 8, borderTopWidth: 1,
+      borderTopColor: '#B8D9C7', gap: 10,
     },
     tagLoadChoices: {
-      flex: 1,
-      gap: 4,
+      flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8,
     },
     frontLoadRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      minHeight: 24,
+      width: '48%', flexDirection: 'row', alignItems: 'center',
+      justifyContent: 'space-between', minHeight: 28, gap: 6,
     },
     frontLoadText: {
+      flex: 1,
       color: '#FFFFFF',
       fontSize: 13,
       fontWeight: '900',
@@ -1750,7 +1765,6 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       lineHeight: 18,
     },
     tagLoadNote: {
-      flex: 1,
       color: '#FFFFFF',
       fontSize: 10,
       fontWeight: '900',
@@ -1759,6 +1773,7 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       textTransform: 'uppercase',
     },
     loadRatingOtherInput: {
+      width: '100%',
       minHeight: 30,
       marginTop: 2,
       backgroundColor: '#FFFFFF',

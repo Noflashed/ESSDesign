@@ -543,7 +543,7 @@ public sealed class ScaffTagPublicViewModel
         CheckToeBoards = details.CheckToeBoards,
         CheckOther = details.CheckOther,
         CheckOtherText = details.CheckOtherText ?? string.Empty,
-        InspectionRecords = details.InspectionRecords.Take(10).ToList(),
+        InspectionRecords = details.InspectionRecords.ToList(),
         PhotoUrls = photoUrls.Where(url => !string.IsNullOrWhiteSpace(url)).Take(2).ToList(),
         PdfUrl = pdfUrl,
         DesignUrl = designUrl,
@@ -605,9 +605,17 @@ public static class ScaffTagPublicPageRenderer
     .choices { display:flex; gap:12px; }
     .choice { display:flex; align-items:center; gap:5px; }
     .box { width:18px; height:18px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; border:1px solid #b8d9c7; background:#fff; color:var(--green); font-size:14px; line-height:1; font-weight:900; }
-    .load-grid { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr); gap:10px; color:#fff; }
-    .load-list { display:grid; gap:4px; }
+    .load-grid { display:grid; grid-template-columns:1fr; gap:10px; color:#fff; }
+    .load-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px; }
+    .load-row:last-child { grid-column:1/-1; }
     .load-row { min-height:21px; display:flex; align-items:center; justify-content:space-between; gap:7px; font-size:11px; line-height:1.15; font-weight:900; }
+    .table-scroll { overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scrollbar-color:#8da9be #fff; }
+    .table-scroll::-webkit-scrollbar { width:8px; }
+    .table-scroll::-webkit-scrollbar-track { background:#edf2f7; }
+    .table-scroll::-webkit-scrollbar-thumb { background:#8da9be; border-radius:4px; }
+    .table-scroll.front-rows { max-height:396px; }
+    .table-scroll.back-rows { max-height:324px; }
+    .table-scroll thead th { position:sticky; top:0; z-index:1; background:#fff; }
     .load-note { font-size:9px; line-height:1.4; letter-spacing:.15px; font-weight:900; text-transform:uppercase; }
     .other-value { grid-column:1/-1; padding:5px 7px; background:#fff; color:var(--ink); font-size:10px; font-weight:750; }
     .section-title { min-height:34px; display:flex; align-items:center; justify-content:center; padding:5px; background:#fff; border-bottom:1px solid var(--line); font-size:17px; letter-spacing:.45px; font-weight:900; text-align:center; }
@@ -745,7 +753,17 @@ public static class ScaffTagPublicPageRenderer
     const company = () => tag.companyEntityId === 'maloo'
       ? { logo:malooLogo, legal:'Maloo Access Group Pty Ltd', address:'130 Gilba Road, Girraween NSW 2145', phone:'(02) 8818 3690' }
       : { logo:essLogo, legal:'Erect Safe Scaffolding (Sydney) Pty Ltd', address:'130 Gilba Road, Girraween NSW 2145', phone:'(02) 8818 3690' };
-    const inspectionRows = count => Array.from({length:count}, (_, index) => tag.inspectionRecords?.[index] || {});
+    const inspectionRows = count => {
+      const records = tag.inspectionRecords || [];
+      let used = 0;
+      records.forEach((row, index) => {
+        if (row.date || row.time || row.note || row.competentPerson || row.signatureStrokes?.length) used = index + 1;
+      });
+      return Array.from({length:Math.max(count, used + (used >= count ? 1 : 0))}, (_, index) => records[index] || {});
+    };
+    const tableWrapper = (count, face) => inspectionRows(count).length > count
+      ? `<div class="table-scroll ${face}-rows" tabindex="0" role="region" aria-label="Scroll inspection history">`
+      : '<div>';
     const loadRow = (key, label) => `<div class="load-row"><span>${label}</span>${checked(tag.loadRating === key)}</div>`;
 
     function renderDocumentNavigation() {
@@ -774,7 +792,7 @@ public static class ScaffTagPublicPageRenderer
           <div class="rule load-grid"><div class="load-list">${loadRow('LIGHT_DUTY','Light Duty 225KG')}${loadRow('MEDIUM_DUTY','Medium Duty 450KG')}${loadRow('HEAVY_DUTY','Heavy Duty 675KG')}${loadRow('SEE_ENGINEERING','See Engineering Drawing')}${loadRow('OTHER','Other')}</div><div class="load-note">THE ABOVE WEIGHTS ARE FOR ONE WORKING PLATFORM ONLY AND INCLUDES MEN AND MATERIALS.</div>${tag.loadRating === 'OTHER' ? `<div class="other-value">${esc(tag.loadRatingOther)}</div>` : ''}</div>
         </section>
         <div class="section-title">AUTHORISED PERSON</div>
-        <table aria-label="Authorised person inspection records"><thead><tr><th class="auth-date">DATE</th><th class="auth-time">TIME</th><th class="auth-name">NAME</th><th class="auth-sign">SIGNATURE</th></tr></thead><tbody>${rows}</tbody></table>
+        ${tableWrapper(10, 'front')}<table aria-label="Authorised person inspection records"><thead><tr><th class="auth-date">DATE</th><th class="auth-time">TIME</th><th class="auth-name">NAME</th><th class="auth-sign">SIGNATURE</th></tr></thead><tbody>${rows}</tbody></table></div>
         <footer class="caution"><span class="warning-box">!</span><div class="caution-copy"><div class="caution-title">CAUTION</div><div class="caution-sub">BE AWARE OF THE FOLLOWING SCAFFOLD HAZARDS</div></div><span class="warning-box">!</span></footer>
       </article>`;
     }
@@ -796,15 +814,18 @@ public static class ScaffTagPublicPageRenderer
           <div class="standard">Built in accordance with AS/NZS 1576 &amp; AS/NZS 4576</div>
         </section>
         <div class="section-title">COMPLIANCE NOTE</div>
-        <table aria-label="Compliance notes"><thead><tr><th class="note-date">DATE</th><th>NOTE</th></tr></thead><tbody>${rows}</tbody></table>
+        ${tableWrapper(8, 'back')}<table aria-label="Compliance notes"><thead><tr><th class="note-date">DATE</th><th>NOTE</th></tr></thead><tbody>${rows}</tbody></table></div>
         <div class="photos-title">SITE PHOTOS</div><div class="photos">${photos}</div>
       </article>`;
     }
 
     function render() {
+      const scrollPositions = {};
+      document.querySelectorAll('.table-scroll').forEach(node => { scrollPositions[node.className] = node.scrollTop; });
       renderDocumentNavigation();
       document.getElementById('front').innerHTML = renderFront();
       document.getElementById('back').innerHTML = renderBack();
+      document.querySelectorAll('.table-scroll').forEach(node => { node.scrollTop = scrollPositions[node.className] || 0; });
       document.querySelectorAll('.tag img').forEach(image => {
         if (!image.complete) image.addEventListener('load', scheduleFit, {once:true});
       });
@@ -935,7 +956,7 @@ public static class ScaffTagPublicPageRenderer
       if (photoButton) openPhotoViewer(photoButton);
     });
     stage.addEventListener('pointerdown', event => {
-      if (event.target.closest('.photo')) { pointerStart = null; return; }
+      if (event.target.closest('.photo, .table-scroll')) { pointerStart = null; return; }
       activePointers.add(event.pointerId);
       if (activePointers.size > 1) {
         pinchInProgress = true;
@@ -951,7 +972,7 @@ public static class ScaffTagPublicPageRenderer
         if (activePointers.size === 0) pinchInProgress = false;
         return;
       }
-      if (!pointerStart || event.target.closest('.photo')) { pointerStart = null; return; }
+      if (!pointerStart || event.target.closest('.photo, .table-scroll')) { pointerStart = null; return; }
       const dx = event.clientX - pointerStart.x;
       const dy = event.clientY - pointerStart.y;
       pointerStart = null;
@@ -964,7 +985,7 @@ public static class ScaffTagPublicPageRenderer
       if (activePointers.size === 0) pinchInProgress = false;
     });
     stage.addEventListener('keydown', event => {
-      if (event.target.closest('.photo')) return;
+      if (event.target.closest('.photo, .table-scroll')) return;
       if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setBack(!isBack); }
     });
     photoViewerClose.addEventListener('click', closePhotoViewer);
