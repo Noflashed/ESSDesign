@@ -832,3 +832,9 @@
  .scaffold-register-action-bar .scaffold-register-add { margin-left:auto; }
 }
 @media(max-width:420px) { .scaffold-register-page .scaffold-register-dropdowns { grid-template-columns:minmax(0,1fr); } }
+
+/* Share a right-aligned reference column; empty actions occupy its far edge. */
+.scaffold-card-documents { grid-template-columns:16px minmax(max-content,1fr) 24px minmax(0,max-content); }
+.scaffold-card-document .scaffold-register-add-cell.is-empty { grid-column:3 / 5; justify-self:end; }
+.scaffold-card-document .scaffold-register-add-cell.is-linked { grid-column:3; justify-self:end; }
+.scaffold-card-document .scaffold-register-document-link { justify-self:end; }

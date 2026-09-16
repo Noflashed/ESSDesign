@@ -606,7 +606,7 @@ export default function ScaffoldRegisterPage({
         } finally { mutationLock.current = false; setMutationBusy(false); }
     };
 
-    const addAction = (label, onClick, linked = false) => <button type="button" className="scaffold-register-add-cell"
+    const addAction = (label, onClick, linked = false) => <button type="button" className={`scaffold-register-add-cell${linked ? " is-linked" : " is-empty"}`}
         aria-label={label} title={label} disabled={mutationBusy} onClick={onClick}>{linked ? <Link2 size={16} aria-hidden="true" /> : <CirclePlus size={16} aria-hidden="true" />}</button>;
 
     const filteredRecords = useMemo(() => {
