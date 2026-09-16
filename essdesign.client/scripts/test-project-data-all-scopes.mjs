@@ -43,6 +43,9 @@ try {
     Math.abs(logo.y + logo.height / 2 - bounds.y - bounds.height / 2) < 2,
   );
   await count(3);
+  const scopeWidths = await page.locator('.pf-scope .scaffold-register-dropdown').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().width));
+  assert.deepEqual(scopeWidths, [320, 360], 'Builder and Project retain their wider desktop widths');
+
   await page.waitForFunction(
     () => document.querySelector(".pf-avatar img")?.naturalWidth > 0,
   );

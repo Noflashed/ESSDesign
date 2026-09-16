@@ -191,6 +191,9 @@
   gap: 8px;
   min-width: 0;
   margin-left: 8px;
+  width: 688px;
+  max-width: 100%;
+  flex: 0 0 auto;
 }
 .pf-scope select,
 .pf-filter-button,
@@ -762,7 +765,8 @@
     padding: 7px 8px;
   }
   .pf-scope {
-    flex: 1 1 55%;
+    width: 100%;
+    flex: 1 1 100%;
     min-width: 0;
   }
   .pf-scope select,
@@ -836,9 +840,9 @@
   line-height: normal;
 }
 .project-files-page .pf-scope .scaffold-register-dropdown {
-  width: 240px;
+  width: 320px;
   min-width: 0;
-  flex: 0 1 240px;
+  flex: 0 1 320px;
 }
 .project-files-page .pf-scope .scaffold-register-dropdown-trigger {
   height: 34px;
@@ -1032,8 +1036,8 @@
   border-radius: inherit;
 }
 .project-files-page .pf-scope .scaffold-register-dropdown:last-child {
-  width: 260px;
-  flex: 0 1 260px;
+  width: 360px;
+  flex: 0 1 360px;
 }
 @media (max-width: 800px) {
   .project-files-page .pf-scope .scaffold-register-dropdown:last-child {
