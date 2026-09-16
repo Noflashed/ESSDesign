@@ -35,11 +35,21 @@ begin
  update public.ess_safety_forms set payload=tag_payload where form_type='scaff-tags' and id='test-monthly-tag';
  select count(*) into c from public.ess_safety_forms where form_type='inspection-reports' and payload->>'sourceScaffTagId'='test-monthly-tag';
  if c<>4 then raise exception 'Date edit duplicated report'; end if;
- -- Removing a row preserves all remaining row identities and report history.
+ -- Removing a row deletes its report and preserves the other reports and their edits.
  tag_payload := jsonb_set(tag_payload,'{inspectionRecords}',(tag_payload->'inspectionRecords')-1);
  update public.ess_safety_forms set payload=tag_payload where form_type='scaff-tags' and id='test-monthly-tag';
  select count(*) into c from public.ess_safety_forms where form_type='inspection-reports' and payload->>'sourceScaffTagId'='test-monthly-tag';
- if c<>4 then raise exception 'Row removal changed report history'; end if;
+ if c<>3 then raise exception 'Row removal did not delete exactly one report'; end if;
+ if exists(select 1 from public.ess_safety_forms where form_type='inspection-reports' and payload->>'sourceScaffTagId'='test-monthly-tag' and payload->>'inspectionDateTime'='16/01/2027 11:30 am') then raise exception 'Removed row report remains'; end if;
+ if (select payload->>'comments' from public.ess_safety_forms where form_type='inspection-reports' and id=report.id) is distinct from 'independent edit' then raise exception 'Remaining report edits lost'; end if;
+ update public.ess_safety_forms set payload=tag_payload where form_type='scaff-tags' and id='test-monthly-tag';
+ select count(*) into c from public.ess_safety_forms where form_type='inspection-reports' and payload->>'sourceScaffTagId'='test-monthly-tag';
+ if c<>3 then raise exception 'Repeat save recreated deleted report'; end if;
+ select count(*) into c from public.ess_safety_forms where form_type='inspection-reports' and payload->>'sourceScaffTagId'='test-monthly-late-tag';
+ if c<>4 then raise exception 'Removal affected another tag'; end if;
+ -- Removing every remaining row also removes the first-row report.
+ update public.ess_safety_forms set payload=jsonb_set(payload,'{inspectionRecords}','[]'::jsonb) where form_type='scaff-tags' and id='test-monthly-tag';
+ if exists(select 1 from public.ess_safety_forms where form_type='inspection-reports' and payload->>'sourceScaffTagId'='test-monthly-tag') then raise exception 'Clearing rows left reports'; end if;
  delete from public.ess_safety_forms where form_type='scaff-tags' and id='test-monthly-tag';
  if exists(select 1 from public.ess_safety_forms where form_type='inspection-reports' and payload->>'sourceScaffTagId'='test-monthly-tag') then raise exception 'Tag deletion left orphan reports'; end if;
 end $$;
