@@ -10,7 +10,9 @@ try {
  await page.locator('.monthly-report-row').first().waitFor();
  assert.equal(await page.locator('.monthly-report-row').count(),4);
  assert.equal(await page.locator('.monthly-report-row strong').first().innerText(),'December 2026 Inspection Report');
- assert.equal(await page.locator('.monthly-report-date').first().innerText(),'16/12/2026\n9:30 am');
+ assert.equal(await page.locator('.monthly-report-date').first().innerText(),'Inspection date\n16/12/2026');
+ assert.equal(await page.locator('.monthly-report-time').first().innerText(),'Inspection time\n9:30 am');
+ assert.equal(await page.locator('.monthly-reports-heading,.monthly-reports-columns,.monthly-report-company').count(),0);
  await page.getByRole('searchbox',{name:'Search inspection reports'}).fill('November');
  assert.equal(await page.locator('.monthly-report-row').count(),1);
  await page.getByRole('searchbox',{name:'Search inspection reports'}).fill('no match');
@@ -24,7 +26,12 @@ try {
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Report list fits viewport');
  }
  await page.setViewportSize({width:1440,height:1000});
- await page.getByRole('button',{name:/December 2026 Inspection Report/}).click();
+ const popupPromise=page.waitForEvent('popup');
+ await page.getByRole('button',{name:'Open PDF for December 2026 Inspection Report',exact:true}).click();
+ const popup=await popupPromise;
+ await popup.waitForURL(/^blob:/);
+ await popup.close();
+ await page.getByRole('button',{name:'View form for December 2026 Inspection Report',exact:true}).click();
  const editor=page.getByRole('dialog',{name:'Inspection Report form',exact:true});
  await editor.waitFor();
  await editor.getByText('Maloo Inspection Report',{exact:true}).first().waitFor();

@@ -55,7 +55,7 @@ XMLHttpRequest.prototype.open = function(method, url, ...args) {
 const originalFetch=window.fetch.bind(window);
 window.fetch=(url,options)=>new URL(typeof url==='string'?url:url.url,location.origin).origin===location.origin?originalFetch(url,options):Promise.reject(new Error('Live services are disabled in the sample preview.'));
 const originalOpen=window.open.bind(window);
-window.open=(url,...rest)=>{if(url==='#sample-qr'){window.alert('Sample QR label — the live register opens its linked interactive Scaff-Tag here.');return null;}return String(url).startsWith(location.origin)?originalOpen(url,...rest):null;};
+window.open=(url,...rest)=>{if(url==='#sample-qr'){window.alert('Sample QR label — the live register opens its linked interactive Scaff-Tag here.');return null;}return (url==='about:blank'||String(url).startsWith(location.origin))?originalOpen(url,...rest):null;};
 document.documentElement.dataset.theme='light';
 const style=document.createElement('style');style.textContent=`
 :root {--bg-primary:#f5f7fa;--bg-secondary:#f5f7fa;--bg-tertiary:#e8edf3;--card-bg:#fff;--text-primary:#142b45;--text-secondary:#647792;--border-color:#e0e7ef;--primary-color:#1769e8;}
