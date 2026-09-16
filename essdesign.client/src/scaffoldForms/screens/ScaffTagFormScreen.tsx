@@ -660,6 +660,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
         date: current.date || parts.isoDate,
         time: current.time || parts.displayTime,
         competentPerson: current.competentPerson || signedInUserName,
+        note: current.note || 'Scaffold compliant',
         signatureStrokes: current.signatureStrokes?.some(stroke => stroke.length > 0)
           ? current.signatureStrokes
           : previousInspectionSignature(
