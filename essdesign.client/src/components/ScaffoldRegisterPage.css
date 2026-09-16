@@ -953,3 +953,25 @@
     .scaffold-register-card, .scaffold-card-dialog, .scaffold-card-dialog * { animation:none !important; transition:none !important; }
     .scaffold-register-card:not(.is-expanded):hover { transform:none; }
 }
+
+/* Light status filters sit naturally on the white register surface. */
+.scaffold-register-tabs {
+    background:transparent;
+    border-color:#e4e7ec;
+    border-radius:8px;
+}
+.scaffold-register-tabs button { color:#667085; }
+.scaffold-register-tabs button span { background:#f2f4f7; color:#667085; }
+.scaffold-register-tabs button.is-selected {
+    background:#eff6ff;
+    color:#175cd3;
+    box-shadow:inset 0 0 0 1px #dbeafe;
+}
+.scaffold-register-tabs button.is-selected span { background:#dbeafe; color:#175cd3; }
+.scaffold-register-tabs button:hover:not(.is-selected) { background:#f8fafc; color:#344054; }
+:root[data-theme="dark"] .scaffold-register-tabs { border-color:var(--border-color); }
+:root[data-theme="dark"] .scaffold-register-tabs button { color:var(--text-secondary); }
+:root[data-theme="dark"] .scaffold-register-tabs button span { background:var(--bg-tertiary); color:var(--text-secondary); }
+:root[data-theme="dark"] .scaffold-register-tabs button.is-selected { background:#1e3a5f; color:#bfdbfe; box-shadow:none; }
+:root[data-theme="dark"] .scaffold-register-tabs button.is-selected span { background:#284d79; color:#bfdbfe; }
+:root[data-theme="dark"] .scaffold-register-tabs button:hover:not(.is-selected) { background:var(--hover-bg); color:var(--text-primary); }
