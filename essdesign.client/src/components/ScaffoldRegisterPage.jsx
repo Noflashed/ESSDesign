@@ -35,6 +35,7 @@ import {listDayLabourVariationForms, setDayLabourVariationDrawingLink} from '../
 import {setScaffTagScaffoldRecord} from '../scaffoldForms/services/supabaseScaffTags';
 import LoadingBrandmark from './LoadingBrandmark';
 import './ScaffoldRegisterPage.css';
+import QRCode from 'qrcode';
 
 const AUTO_REFRESH_MS = 30_000;
 const FILTER_STORAGE_KEY = 'ess-scaffold-register-filters-v1';
@@ -52,9 +53,16 @@ function readStoredFilters() {
     }
 }
 
-function ScaffoldQrThumbnail({url, number, scaffoldName, companyEntityId}) {
-    // Match the decorative card thumbnails used by iOS; the link carries the real destination.
-    const image = url ? `/scaffold-forms/${normalizeCompanyEntityId(companyEntityId)}-qr-thumbnail.png` : '';
+function ScaffoldQrThumbnail({url, number, scaffoldName}) {
+    const [image, setImage] = useState('');
+    useEffect(() => {
+        let active = true;
+        setImage('');
+        if (url) QRCode.toDataURL(url, {width:160, margin:2, errorCorrectionLevel:'M'})
+            .then(value => { if (active) setImage(value); })
+            .catch(() => { if (active) setImage(''); });
+        return () => { active = false; };
+    }, [url]);
     const content = <>{image ? <img src={image} alt="" /> : <QrCode size={42} aria-hidden="true" />}<span>{number || (url ? 'View QR' : 'No QR')}</span></>;
     return url ? <a className="scaffold-card-qr" href={url}
         aria-label={`Open QR webpage for ${scaffoldName}`} title={`Open ${number || 'linked QR webpage'}`}>{content}</a>
@@ -686,7 +694,7 @@ export default function ScaffoldRegisterPage({
                                         onKeyDown={event => { if (!expanded && event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); setExpandedCard(item); } }}
                                         onContextMenu={event => openRowMenu(event, item)}>
                                         <div className="scaffold-card-heading">
-                                            <ScaffoldQrThumbnail url={hasQrLabel ? item.tag.qrTargetUrl : ''} number={hasQrLabel ? item.tag.qrLabelNumber : ''} scaffoldName={item.scaffoldName} companyEntityId={item.tag?.companyEntityId} />
+                                            <ScaffoldQrThumbnail url={hasQrLabel ? item.tag.qrTargetUrl : ''} number={hasQrLabel ? item.tag.qrLabelNumber : ''} scaffoldName={item.scaffoldName} />
                                             <div className="scaffold-card-name"><h2 title={item.scaffoldName}>{item.scaffoldName}</h2>
                                                 <p>{item.builderName}</p>
                                                 <p>{item.projectName}</p>
