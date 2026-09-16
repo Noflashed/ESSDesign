@@ -143,6 +143,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
   const [showDrawer, setShowDrawer] = React.useState(false);
   const [loading, setLoading] = React.useState(!!route.params.formId);
   const [saving, setSaving] = React.useState(false);
+  const [inspectionToDelete, setInspectionToDelete] = React.useState<number | null>(null);
   const [frontInsertLayout, setFrontInsertLayout] = React.useState({x: 0, y: 0});
   const [inspectionTableY, setInspectionTableY] = React.useState(0);
   const [inspectionHeaderHeight, setInspectionHeaderHeight] = React.useState(0);
@@ -642,18 +643,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
     if (isReadOnly) { return; }
     const row = form.inspectionRecords[index];
     if (!row || !inspectionRowHasContent(row)) { return; }
-    Alert.alert(
-      'Remove inspection?',
-      `Remove inspection ${index + 1}${row.date ? ` (${formatScaffoldDate(row.date)})` : ''}, including its signature and compliance note? Save the Scaff-Tag to apply this change.`,
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {text: 'Remove', style: 'destructive', onPress: () => {
-          setForm(previous => ({...previous, inspectionRecords: removeInspectionRow(previous.inspectionRecords, index)}));
-          // Measurements belong to rendered cell positions; unchanged cells do not fire onLayout again.
-          // Keep them so the remaining signatures retain non-zero drawing dimensions.
-        }},
-      ],
-    );
+    setInspectionToDelete(index);
   };
 
   const autofillInspectionRow = (index: number) => {
@@ -1453,6 +1443,27 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
         onGoNotifications={() => navigation.navigate('Notifications')}
         onGoSettings={() => navigation.navigate('Settings')}
       />
+
+      <Modal visible={inspectionToDelete !== null} transparent animationType="fade" onRequestClose={() => setInspectionToDelete(null)}>
+        <Pressable style={styles.deleteInspectionOverlay} onPress={() => setInspectionToDelete(null)}>
+          <Pressable style={styles.deleteInspectionCard} accessibilityViewIsModal onPress={() => {}}>
+            <Text style={styles.deleteInspectionTitle}>Are you sure you want to delete?</Text>
+            <View style={styles.deleteInspectionActions}>
+              <TouchableOpacity accessibilityRole="button" style={styles.deleteInspectionCancel} onPress={() => setInspectionToDelete(null)}>
+                <Text style={styles.deleteInspectionCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" style={styles.deleteInspectionConfirm} onPress={() => {
+                if (isReadOnly || inspectionToDelete === null) { return; }
+                const index = inspectionToDelete;
+                setInspectionToDelete(null);
+                setForm(previous => ({...previous, inspectionRecords: removeInspectionRow(previous.inspectionRecords, index)}));
+              }}>
+                <Text style={styles.deleteInspectionConfirmText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={showDatePicker} transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowDatePicker(false)}>
@@ -2949,6 +2960,24 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       borderRadius: BorderRadius.full,
     },
     userAvatarFallbackText: {color: '#fff', fontWeight: '700', fontSize: 14},
+    deleteInspectionOverlay: {
+      flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24,
+    },
+    deleteInspectionCard: {
+      width: '100%', maxWidth: 340, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 24,
+    },
+    deleteInspectionTitle: {
+      color: '#172B3A', fontSize: 18, lineHeight: 25, fontWeight: '700', textAlign: 'center',
+    },
+    deleteInspectionActions: {flexDirection: 'row', gap: 12, marginTop: 24},
+    deleteInspectionCancel: {
+      flex: 1, minHeight: 46, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center',
+    },
+    deleteInspectionConfirm: {
+      flex: 1, minHeight: 46, borderRadius: 12, backgroundColor: '#B42318', alignItems: 'center', justifyContent: 'center',
+    },
+    deleteInspectionCancelText: {color: '#334155', fontSize: 15, fontWeight: '700'},
+    deleteInspectionConfirmText: {color: '#FFFFFF', fontSize: 15, fontWeight: '700'},
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.35)',
