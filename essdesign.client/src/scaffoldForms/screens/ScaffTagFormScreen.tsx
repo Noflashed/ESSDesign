@@ -1,3 +1,4 @@
+import Svg, {Polyline} from '../browser/svg';
 import ScaffTagTableScroll from '../components/ScaffTagTableScroll';
 import {inspectionTableRows, complianceTableRows, previousInspectionSignature, removeInspectionRow} from '../utils/scaffTagInspectionRows';
 import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
@@ -1447,6 +1448,13 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
       <Modal visible={inspectionToDelete !== null} transparent animationType="fade" onRequestClose={() => setInspectionToDelete(null)}>
         <Pressable style={styles.deleteInspectionOverlay} onPress={() => setInspectionToDelete(null)}>
           <Pressable style={styles.deleteInspectionCard} accessibilityViewIsModal onPress={() => {}}>
+            <View style={styles.deleteInspectionWarning} accessible={false}>
+              <Svg width={56} height={52} viewBox="0 0 56 52">
+                <Polyline points="28,4 52,46 4,46 28,4" fill="#FFF8E1" stroke="#B7791F" strokeWidth={2.5} strokeDasharray="5 4" strokeLinejoin="round" />
+                <Polyline points="28,19 28,30" fill="none" stroke="#B7791F" strokeWidth={3.5} strokeLinecap="round" />
+                <Polyline points="28,37 28,37.2" fill="none" stroke="#B7791F" strokeWidth={4} strokeLinecap="round" />
+              </Svg>
+            </View>
             <Text style={styles.deleteInspectionTitle}>Are you sure you want to delete?</Text>
             <View style={styles.deleteInspectionActions}>
               <TouchableOpacity accessibilityRole="button" style={styles.deleteInspectionCancel} onPress={() => setInspectionToDelete(null)}>
@@ -2966,6 +2974,7 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
     deleteInspectionCard: {
       width: '100%', maxWidth: 340, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 24,
     },
+    deleteInspectionWarning: {alignItems: 'center', marginBottom: 14},
     deleteInspectionTitle: {
       color: '#172B3A', fontSize: 18, lineHeight: 25, fontWeight: '700', textAlign: 'center',
     },
