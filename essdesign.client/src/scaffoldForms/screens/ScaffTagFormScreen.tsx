@@ -1450,9 +1450,9 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
           <Pressable style={styles.deleteInspectionCard} accessibilityViewIsModal onPress={() => {}}>
             <View style={styles.deleteInspectionWarning} accessible={false}>
               <Svg width={56} height={52} viewBox="0 0 56 52">
-                <Polyline points="28,4 52,46 4,46 28,4" fill="#FFF8E1" stroke="#B7791F" strokeWidth={2.5} strokeDasharray="5 4" strokeLinejoin="round" />
-                <Polyline points="28,19 28,30" fill="none" stroke="#B7791F" strokeWidth={3.5} strokeLinecap="round" />
-                <Polyline points="28,37 28,37.2" fill="none" stroke="#B7791F" strokeWidth={4} strokeLinecap="round" />
+                <Polyline points="28,4 52,46 4,46 28,4" fill="#FEF2F2" stroke="#B42318" strokeWidth={2.5} strokeDasharray="5 4" strokeLinejoin="round" />
+                <Polyline points="28,19 28,30" fill="none" stroke="#B42318" strokeWidth={3.5} strokeLinecap="round" />
+                <Polyline points="28,37 28,37.2" fill="none" stroke="#B42318" strokeWidth={4} strokeLinecap="round" />
               </Svg>
             </View>
             <Text style={styles.deleteInspectionTitle}>Are you sure you want to delete?</Text>
