@@ -2728,7 +2728,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
             ? {uri: '/scaffold-forms/phone-page-1-maloo.png'}
             : {uri: '/scaffold-forms/phone-page-1.png'},
           <>
-            {isInspectionReport ? <View pointerEvents="none" style={[phoneFormBoxStyle({left: 530, top: 67, width: 210, height: 27}), {backgroundColor: '#FFFFFF', zIndex: 2, justifyContent: 'center', alignItems: 'flex-end'}]}>
+            {isInspectionReport ? <View pointerEvents="none" style={[phoneFormBoxStyle({left: 490, top: 67, width: 250, height: 27}), {backgroundColor: '#FFFFFF', zIndex: 2, justifyContent: 'center', alignItems: 'flex-end'}]}>
               <Text style={{color: '#111111', fontSize: 16, fontWeight: '700'}}>{companyFormTitle(company.id, documentName)}</Text>
             </View> : null}
             <View

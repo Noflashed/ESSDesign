@@ -42,7 +42,7 @@
     "services/scaffoldFormDates.ts"
   ],
   "sha256": {
-    "screens/HandoverCertificateFormScreen.tsx": "fa3cf06e31b0425223f93c6c6b952a2034daa2e2f6f77c5ee4b7403846170677",
+    "screens/HandoverCertificateFormScreen.tsx": "1cca72b11264d4aa80eff74d1379c9cffc14ed8bc55d6f0b86dde7a6146c2009",
     "screens/ScaffTagFormScreen.tsx": "3d01ad869f341f134136f3e7ecdbdd790cc576617cd82a41058383ad9410c67b",
     "components/AppTopBar.tsx": "1db0ccbb0f3db7f5653d1345143707271857c0f37aca0d61f3b818e72b742123",
     "components/CompanyEntitySelector.tsx": "370dd3c1ef50972fd7617b5a0a570d6c6a8aa625d116e0644f8e88607254d631",
