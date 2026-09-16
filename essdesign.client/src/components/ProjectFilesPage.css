@@ -209,7 +209,7 @@
   text-overflow: ellipsis;
 }
 .pf-scope select:last-child {
-  width: 185px;
+  width: 260px;
 }
 .pf-search {
   display: flex;
@@ -836,9 +836,9 @@
   line-height: normal;
 }
 .project-files-page .pf-scope .scaffold-register-dropdown {
-  width: 190px;
+  width: 240px;
   min-width: 0;
-  flex: 0 1 190px;
+  flex: 0 1 240px;
 }
 .project-files-page .pf-scope .scaffold-register-dropdown-trigger {
   height: 34px;
