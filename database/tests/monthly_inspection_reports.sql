@@ -39,10 +39,17 @@ begin
  if (select jsonb_agg(t) from public.ess_handover_inspection_counters t) is distinct from handover_counters then raise exception 'Report creation changed handover counter'; end if;
  -- Editing an identified inspection must not generate another report.
  select payload into tag_payload from public.ess_safety_forms where form_type='scaff-tags' and id='test-monthly-tag';
- tag_payload := jsonb_set(tag_payload,'{inspectionRecords,0,date}','"2026-12-17"'::jsonb);
+ tag_payload := jsonb_set(tag_payload,'{inspectionRecords,0,date}','"2027-01-17"'::jsonb);
  update public.ess_safety_forms set payload=tag_payload where form_type='scaff-tags' and id='test-monthly-tag';
  select count(*) into c from public.ess_safety_forms where form_type='inspection-reports' and payload->>'sourceScaffTagId'='test-monthly-tag';
  if c<>4 then raise exception 'Date edit duplicated report'; end if;
+ if (select payload->>'inspectionDateTime' from public.ess_safety_forms where form_type='inspection-reports' and id=report.id) <> '17/01/2027 10:30 am' then raise exception 'Report date not synced'; end if;
+ if (select title from public.ess_safety_forms where form_type='inspection-reports' and id=report.id) <> 'January 17/01/2027 Inspection Report' then raise exception 'Report month/title not synced'; end if;
+ tag_payload := jsonb_set(tag_payload,'{inspectionRecords,0,time}','"2:45 pm"'::jsonb);
+ update public.ess_safety_forms set payload=tag_payload where form_type='scaff-tags' and id='test-monthly-tag';
+ if (select payload->>'inspectionDateTime' from public.ess_safety_forms where form_type='inspection-reports' and id=report.id) <> '17/01/2027 2:45 pm' then raise exception 'Time-only edit not synced'; end if;
+ if (select reference_number from public.ess_safety_forms where form_type='inspection-reports' and id=report.id) <> report.reference_number then raise exception 'Date/time edit changed number'; end if;
+ if (select payload->>'comments' from public.ess_safety_forms where form_type='inspection-reports' and id=report.id) <> 'independent edit' then raise exception 'Date sync overwrote report edits'; end if;
  -- Removing a row deletes its report and preserves the other reports and their edits.
  tag_payload := jsonb_set(tag_payload,'{inspectionRecords}',(tag_payload->'inspectionRecords')-1);
  update public.ess_safety_forms set payload=tag_payload where form_type='scaff-tags' and id='test-monthly-tag';

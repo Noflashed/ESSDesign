@@ -16,7 +16,7 @@ with numbered as (
 update public.ess_safety_forms f
 set reference_number=lpad(n.number,greatest(4,length(n.number)),'0'),
     payload=jsonb_set(jsonb_set(f.payload,'{inspectionNumber}',to_jsonb(lpad(n.number,greatest(4,length(n.number)),'0'))),'{pdfPath}','""'::jsonb),
-    pdf_path=null
+    pdf_path=''
 from numbered n where f.form_type='inspection-reports' and f.id=n.id;
 
 insert into public.ess_inspection_report_counter(singleton,last_value)
