@@ -690,6 +690,12 @@ export default function ScaffoldRegisterPage({
             </section>
 
             <div className="scaffold-register-action-bar" inert={editor ? "" : undefined}>
+                        <div className="scaffold-register-tabs" aria-label="Filter scaffolds by status">
+                            {statusTabs.map(([value, label]) => <button key={value} type="button" aria-pressed={statusFilter === value}
+                                className={statusFilter === value ? 'is-selected' : ''} onClick={() => setStatusFilter(value)}>
+                                {label}<span>{filteredRecords.filter(item => value === 'all' || lifecycleStatus(item) === value).length}</span>
+                            </button>)}
+                        </div>
                 <button type="button" className="scaffold-register-add" disabled={mutationBusy || !hasSpecificSite}
                     title={hasSpecificSite ? 'Add scaffold' : 'Select a specific site to add a scaffold'}
                     onClick={() => {setScaffoldName(''); setNameError(''); setNameDialogOpen(true);}}>
@@ -709,12 +715,6 @@ export default function ScaffoldRegisterPage({
                     </div>
                 ) : (
                     <>
-                        <div className="scaffold-register-tabs" aria-label="Filter scaffolds by status">
-                            {statusTabs.map(([value, label]) => <button key={value} type="button" aria-pressed={statusFilter === value}
-                                className={statusFilter === value ? 'is-selected' : ''} onClick={() => setStatusFilter(value)}>
-                                {label}<span>{filteredRecords.filter(item => value === 'all' || lifecycleStatus(item) === value).length}</span>
-                            </button>)}
-                        </div>
                         {visibleRecords.length === 0 && <div className="scaffold-register-empty">
                             <ListTree size={24} aria-hidden="true" />
                             <span>{records.length ? 'No scaffolds match the current search or status.' : 'No scaffold records yet. Add a scaffold to get started.'}</span>

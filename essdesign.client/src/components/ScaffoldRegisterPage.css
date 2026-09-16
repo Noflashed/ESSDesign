@@ -808,3 +808,27 @@
 .scaffold-card-documents { display:grid; grid-template-columns:16px max-content 24px minmax(0,1fr); column-gap:9px; }
 .scaffold-card-document { grid-column:1 / -1; grid-template-columns:subgrid; }
 :root[data-theme="dark"] .scaffold-register-page { background:var(--bg-primary); }
+
+/* Align register controls into two balanced rows above the cards. */
+.scaffold-register-page { gap:20px; }
+.scaffold-register-page .scaffold-register-toolbar { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(240px,1fr); gap:16px; }
+.scaffold-register-page .scaffold-register-dropdowns { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; }
+.scaffold-register-page .scaffold-register-dropdown { width:100%; min-width:0; }
+.scaffold-register-page .scaffold-register-toolbar-actions { display:flex; flex-direction:row; width:100%; gap:10px; }
+.scaffold-register-page .scaffold-register-search { box-sizing:border-box; width:auto; flex:1; height:44px; }
+.scaffold-register-action-bar { justify-content:space-between; gap:16px; padding-bottom:16px; border-bottom:1px solid var(--border-color,#e5eaf0); }
+.scaffold-register-tabs { margin:0; display:flex; gap:4px; padding:4px; border:1px solid var(--border-color,#e5eaf0); border-radius:10px; background:var(--bg-secondary,#f6f8fa); min-width:0; }
+.scaffold-register-tabs button { min-height:34px; padding:6px 12px; border:0; border-radius:7px; font-weight:500; gap:7px; }
+.scaffold-register-tabs button.is-selected { background:var(--card-bg,#fff); color:var(--text-primary,#142b45); box-shadow:0 1px 4px #142b451a; }
+.scaffold-register-tabs button:hover:not(.is-selected) { background:var(--bg-tertiary,#edf1f5); }
+.scaffold-register-tabs button span { min-width:18px; text-align:center; box-sizing:border-box; }
+.scaffold-register-action-bar .scaffold-register-add { height:44px; padding:0 16px; border-radius:8px; box-shadow:0 1px 2px #142b451a; }
+.scaffold-register-action-bar .scaffold-register-add:hover:not(:disabled) { background:#234561; }
+@media(max-width:1100px) { .scaffold-register-page .scaffold-register-toolbar { grid-template-columns:minmax(0,1fr); gap:12px; } }
+@media(max-width:700px) {
+ .scaffold-register-action-bar { flex-wrap:wrap; align-items:center; gap:12px; }
+ .scaffold-register-tabs { flex:1 1 100%; justify-content:space-between; overflow-x:auto; }
+ .scaffold-register-tabs button { padding:6px 7px; gap:5px; }
+ .scaffold-register-action-bar .scaffold-register-add { margin-left:auto; }
+}
+@media(max-width:420px) { .scaffold-register-page .scaffold-register-dropdowns { grid-template-columns:minmax(0,1fr); } }
