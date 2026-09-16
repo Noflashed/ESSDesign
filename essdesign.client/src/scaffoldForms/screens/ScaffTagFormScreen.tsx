@@ -1,3 +1,4 @@
+import ScaffTagTableScroll from '../components/ScaffTagTableScroll';
 import {inspectionTableRows, complianceTableRows, previousInspectionSignature} from '../utils/scaffTagInspectionRows';
 import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/screens/ScaffTagFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
@@ -1157,16 +1158,13 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                   <Text style={styles.authorisedHeaderText}>AUTHORISED PERSON</Text>
                 </View>
                 <View style={styles.authorisedTable}>
-                  <View style={styles.authorisedTableHeader}>
+                  <View style={[styles.authorisedTableHeader, form.inspectionRecords.length > 10 && styles.scrollTableHeader]}>
                     <Text style={[styles.authHeaderCell, styles.authDateCell]}>DATE</Text>
                     <Text style={[styles.authHeaderCell, styles.authTimeCell]}>TIME</Text>
                     <Text style={[styles.authHeaderCell, styles.authNameCell]}>NAME</Text>
                     <Text style={[styles.authHeaderCell, styles.authSignatureCell]}>SIGNATURE</Text>
                   </View>
-                  <ScrollView style={styles.inspectionRowsViewport} nestedScrollEnabled
-                    scrollEnabled={form.inspectionRecords.length > 10}
-                    showsVerticalScrollIndicator={form.inspectionRecords.length > 10}
-                    keyboardShouldPersistTaps="handled">
+                  <ScaffTagTableScroll maxHeight={390} enabled={form.inspectionRecords.length > 10}>
                   {form.inspectionRecords.map((row, index) => {
                     const isActive = inspectionRowHasContent(row);
                     return (
@@ -1230,7 +1228,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                       </View>
                     );
                   })}
-                  </ScrollView>
+                  </ScaffTagTableScroll>
                 </View>
 
                 <View style={styles.frontCautionBand}>
@@ -1343,14 +1341,11 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                   <Text style={styles.complianceHeaderText}>COMPLIANCE NOTE</Text>
                 </View>
                 <View style={styles.reverseTable}>
-                  <View style={styles.reverseTableHeader}>
+                  <View style={[styles.reverseTableHeader, complianceRows.length > 8 && styles.scrollTableHeader]}>
                     <Text style={[styles.reverseHeaderCell, styles.reverseDateCell]}>DATE</Text>
                     <Text style={[styles.reverseHeaderCell, styles.reversePersonCell]}>NOTE</Text>
                   </View>
-                  <ScrollView style={styles.complianceRowsViewport} nestedScrollEnabled
-                    scrollEnabled={complianceRows.length > 8}
-                    showsVerticalScrollIndicator={complianceRows.length > 8}
-                    keyboardShouldPersistTaps="handled">
+                  <ScaffTagTableScroll maxHeight={336} enabled={complianceRows.length > 8}>
                   {complianceRows.map((row, index) => (
                     <View key={`row-${index}`} style={styles.reverseTableRow}>
                       <View style={[styles.reverseInputButton, styles.reverseDateCell]}>
@@ -1367,7 +1362,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                       />
                     </View>
                   ))}
-                  </ScrollView>
+                  </ScaffTagTableScroll>
                 </View>
 
                 <View style={[styles.reversePhotosPanel, usesIOSDocumentEditor && styles.iOSReversePhotosPanel]}>
@@ -1736,8 +1731,7 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       lineHeight: 15,
       fontWeight: '900',
     },
-    inspectionRowsViewport: {maxHeight: 390},
-    complianceRowsViewport: {maxHeight: 336},
+    scrollTableHeader: {paddingRight: 14},
     frontLoadOtherRow: {width: '100%'},
     tagLoadPanel: {
       marginTop: 6, paddingTop: 8, borderTopWidth: 1,

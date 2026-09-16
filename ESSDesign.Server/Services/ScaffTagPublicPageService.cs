@@ -609,10 +609,14 @@ public static class ScaffTagPublicPageRenderer
     .load-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px; }
     .load-row:last-child { grid-column:1/-1; }
     .load-row { min-height:21px; display:flex; align-items:center; justify-content:space-between; gap:7px; font-size:11px; line-height:1.15; font-weight:900; }
-    .table-scroll { overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scrollbar-color:#8da9be #fff; }
-    .table-scroll::-webkit-scrollbar { width:8px; }
-    .table-scroll::-webkit-scrollbar-track { background:#edf2f7; }
-    .table-scroll::-webkit-scrollbar-thumb { background:#8da9be; border-radius:4px; }
+    .table-scroll-shell { position:relative; padding-right:14px; background:#fff; }
+    .table-scroll-track { position:absolute; right:2px; top:6px; bottom:6px; width:10px; border-radius:5px; background:#d3e1da; pointer-events:none; }
+    .table-scroll-thumb { position:absolute; left:1px; width:8px; height:30px; border-radius:4px; background:#0b7f45; }
+    .table-scroll { overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .table-scroll::-webkit-scrollbar { display:none; }
+    .table-scroll::-webkit-scrollbar-track { background:#d3e1da; }
+    .table-scroll::-webkit-scrollbar-thumb { background:#0b7f45; border:2px solid #d3e1da; border-radius:6px; }
+    .table-scroll-hint { padding:7px 10px; background:#e5f3eb; border-bottom:1px solid #8da9be; color:#0b4f2f; text-align:center; font-size:12px; font-weight:800; }
     .table-scroll.front-rows { max-height:396px; }
     .table-scroll.back-rows { max-height:324px; }
     .table-scroll thead th { position:sticky; top:0; z-index:1; background:#fff; }
@@ -762,8 +766,20 @@ public static class ScaffTagPublicPageRenderer
       return Array.from({length:Math.max(count, used + (used >= count ? 1 : 0))}, (_, index) => records[index] || {});
     };
     const tableWrapper = (count, face) => inspectionRows(count).length > count
-      ? `<div class="table-scroll ${face}-rows" tabindex="0" role="region" aria-label="Scroll inspection history">`
+      ? `<div class="table-scroll-hint">↕ Scroll for more inspections</div><div class="table-scroll-shell"><div class="table-scroll ${face}-rows" tabindex="0" role="region" aria-label="Scroll inspection history">`
       : '<div>';
+    const tableEnd = count => inspectionRows(count).length > count
+      ? '</div><div class="table-scroll-track" aria-hidden="true"><div class="table-scroll-thumb"></div></div></div>'
+      : '</div>';
+    function updateTableScrollbar(node) {
+      const track = node.parentElement.querySelector('.table-scroll-track');
+      if (!track) return;
+      const thumb = track.firstElementChild;
+      const height = Math.min(track.clientHeight, Math.max(30, track.clientHeight * node.clientHeight / Math.max(1, node.scrollHeight)));
+      const progress = Math.min(1, Math.max(0, node.scrollTop / Math.max(1, node.scrollHeight - node.clientHeight)));
+      thumb.style.height = `${height}px`;
+      thumb.style.top = `${progress * (track.clientHeight - height)}px`;
+    }
     const loadRow = (key, label) => `<div class="load-row"><span>${label}</span>${checked(tag.loadRating === key)}</div>`;
 
     function renderDocumentNavigation() {
@@ -792,7 +808,7 @@ public static class ScaffTagPublicPageRenderer
           <div class="rule load-grid"><div class="load-list">${loadRow('LIGHT_DUTY','Light Duty 225KG')}${loadRow('MEDIUM_DUTY','Medium Duty 450KG')}${loadRow('HEAVY_DUTY','Heavy Duty 675KG')}${loadRow('SEE_ENGINEERING','See Engineering Drawing')}${loadRow('OTHER','Other')}</div><div class="load-note">THE ABOVE WEIGHTS ARE FOR ONE WORKING PLATFORM ONLY AND INCLUDES MEN AND MATERIALS.</div>${tag.loadRating === 'OTHER' ? `<div class="other-value">${esc(tag.loadRatingOther)}</div>` : ''}</div>
         </section>
         <div class="section-title">AUTHORISED PERSON</div>
-        ${tableWrapper(10, 'front')}<table aria-label="Authorised person inspection records"><thead><tr><th class="auth-date">DATE</th><th class="auth-time">TIME</th><th class="auth-name">NAME</th><th class="auth-sign">SIGNATURE</th></tr></thead><tbody>${rows}</tbody></table></div>
+        ${tableWrapper(10, 'front')}<table aria-label="Authorised person inspection records"><thead><tr><th class="auth-date">DATE</th><th class="auth-time">TIME</th><th class="auth-name">NAME</th><th class="auth-sign">SIGNATURE</th></tr></thead><tbody>${rows}</tbody></table>${tableEnd(10)}
         <footer class="caution"><span class="warning-box">!</span><div class="caution-copy"><div class="caution-title">CAUTION</div><div class="caution-sub">BE AWARE OF THE FOLLOWING SCAFFOLD HAZARDS</div></div><span class="warning-box">!</span></footer>
       </article>`;
     }
@@ -814,7 +830,7 @@ public static class ScaffTagPublicPageRenderer
           <div class="standard">Built in accordance with AS/NZS 1576 &amp; AS/NZS 4576</div>
         </section>
         <div class="section-title">COMPLIANCE NOTE</div>
-        ${tableWrapper(8, 'back')}<table aria-label="Compliance notes"><thead><tr><th class="note-date">DATE</th><th>NOTE</th></tr></thead><tbody>${rows}</tbody></table></div>
+        ${tableWrapper(8, 'back')}<table aria-label="Compliance notes"><thead><tr><th class="note-date">DATE</th><th>NOTE</th></tr></thead><tbody>${rows}</tbody></table>${tableEnd(8)}
         <div class="photos-title">SITE PHOTOS</div><div class="photos">${photos}</div>
       </article>`;
     }
@@ -825,7 +841,7 @@ public static class ScaffTagPublicPageRenderer
       renderDocumentNavigation();
       document.getElementById('front').innerHTML = renderFront();
       document.getElementById('back').innerHTML = renderBack();
-      document.querySelectorAll('.table-scroll').forEach(node => { node.scrollTop = scrollPositions[node.className] || 0; });
+      document.querySelectorAll('.table-scroll').forEach(node => { node.scrollTop = scrollPositions[node.className] || 0; updateTableScrollbar(node); node.addEventListener('scroll', () => updateTableScrollbar(node), {passive:true}); });
       document.querySelectorAll('.tag img').forEach(image => {
         if (!image.complete) image.addEventListener('load', scheduleFit, {once:true});
       });
@@ -869,6 +885,7 @@ public static class ScaffTagPublicPageRenderer
       fitFrame = 0;
       fitFace(document.getElementById('front'));
       fitFace(document.getElementById('back'));
+      document.querySelectorAll('.table-scroll').forEach(updateTableScrollbar);
     }
 
     function scheduleFit() {
@@ -956,7 +973,7 @@ public static class ScaffTagPublicPageRenderer
       if (photoButton) openPhotoViewer(photoButton);
     });
     stage.addEventListener('pointerdown', event => {
-      if (event.target.closest('.photo, .table-scroll')) { pointerStart = null; return; }
+      if (event.target.closest('.photo, .table-scroll-shell, .table-scroll-hint')) { pointerStart = null; return; }
       activePointers.add(event.pointerId);
       if (activePointers.size > 1) {
         pinchInProgress = true;
@@ -972,7 +989,7 @@ public static class ScaffTagPublicPageRenderer
         if (activePointers.size === 0) pinchInProgress = false;
         return;
       }
-      if (!pointerStart || event.target.closest('.photo, .table-scroll')) { pointerStart = null; return; }
+      if (!pointerStart || event.target.closest('.photo, .table-scroll-shell, .table-scroll-hint')) { pointerStart = null; return; }
       const dx = event.clientX - pointerStart.x;
       const dy = event.clientY - pointerStart.y;
       pointerStart = null;
@@ -985,7 +1002,7 @@ public static class ScaffTagPublicPageRenderer
       if (activePointers.size === 0) pinchInProgress = false;
     });
     stage.addEventListener('keydown', event => {
-      if (event.target.closest('.photo, .table-scroll')) return;
+      if (event.target.closest('.photo, .table-scroll-shell, .table-scroll-hint')) return;
       if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setBack(!isBack); }
     });
     photoViewerClose.addEventListener('click', closePhotoViewer);
