@@ -13,7 +13,6 @@ import {
     HardHat,
     ListTree,
     Link2,
-    Plus,
     CirclePlus,
     RefreshCw,
     Search,
@@ -691,7 +690,7 @@ export default function ScaffoldRegisterPage({
                 <button type="button" className="scaffold-register-add" disabled={mutationBusy || !hasSpecificSite}
                     title={hasSpecificSite ? 'Add scaffold' : 'Select a specific site to add a scaffold'}
                     onClick={() => {setScaffoldName(''); setNameError(''); setNameDialogOpen(true);}}>
-                    <Plus size={18} aria-hidden="true" /><span>Add scaffold</span>
+                    <CirclePlus size={15} strokeWidth={2.2} aria-hidden="true" /><span>Add scaffold</span>
                 </button>
             </div>
 

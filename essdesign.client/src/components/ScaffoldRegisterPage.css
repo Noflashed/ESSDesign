@@ -876,3 +876,49 @@
 @media(prefers-reduced-motion:reduce) {
     .scaffold-register-action-bar .scaffold-register-add { transition:none; }
 }
+
+/* Match the Site Registry Add Project action. */
+.scaffold-register-action-bar .scaffold-register-add {
+    height:36px;
+    min-height:36px;
+    min-width:120px;
+    padding:0 13px;
+    border:1px solid #d4d4d8;
+    border-radius:5px;
+    background:#f4f4f5;
+    color:#27272a;
+    box-shadow:none;
+    font-size:12px;
+    font-weight:600;
+}
+.scaffold-register-action-bar .scaffold-register-add:hover:not(:disabled) {
+    border-color:#a1a1aa;
+    background:#e4e4e7;
+    color:#18181b;
+}
+.scaffold-register-action-bar .scaffold-register-add:focus-visible {
+    outline:3px solid rgba(113,113,122,.14);
+    outline-offset:2px;
+}
+/* Small feedback transitions keep the register calm and responsive. */
+.scaffold-register-card { transition:box-shadow 180ms ease, border-color 180ms ease; }
+.scaffold-register-card:focus-within { border-color:#a8b9d0; }
+.scaffold-card-qr img { transition:transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease; }
+.scaffold-register-tabs button,
+.scaffold-card-menu,
+.scaffold-register-add-cell,
+.scaffold-register-document-link { transition:background-color 140ms ease, color 140ms ease, box-shadow 140ms ease; }
+.scaffold-card-menu { border-radius:4px; }
+.scaffold-card-menu:hover { background:var(--hover-bg,#f4f4f5); color:var(--text-primary,#27272a); }
+.scaffold-card-document .scaffold-register-document-link:hover:not(:disabled) { text-decoration:underline; text-underline-offset:3px; }
+@media(hover:hover) and (pointer:fine) {
+    .scaffold-register-card:hover { border-color:#b8c5d5; box-shadow:0 5px 18px rgba(15,35,55,.08); }
+    .scaffold-card-qr:hover img { transform:scale(1.035); }
+}
+@media(prefers-reduced-motion:reduce) {
+    .scaffold-register-page *, .scaffold-register-page *::before, .scaffold-register-page *::after {
+        transition:none !important;
+        animation:none !important;
+    }
+    .scaffold-card-qr:hover img { transform:none; }
+}
