@@ -1,4 +1,4 @@
-import {inspectionTableRows, complianceTableRows} from '../utils/scaffTagInspectionRows';
+import {inspectionTableRows, complianceTableRows, previousInspectionSignature} from '../utils/scaffTagInspectionRows';
 import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/screens/ScaffTagFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
 import React from 'react';
@@ -643,6 +643,14 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
         date: current.date || parts.isoDate,
         time: current.time || parts.displayTime,
         competentPerson: current.competentPerson || signedInUserName,
+        signatureStrokes: current.signatureStrokes?.some(stroke => stroke.length > 0)
+          ? current.signatureStrokes
+          : previousInspectionSignature(
+              previous.inspectionRecords,
+              current.competentPerson || signedInUserName,
+              previous.inspectedBy,
+              previous.erectedBySignatureStrokes,
+            ),
         inspectedAt: current.inspectedAt || parts.instant,
         timeZone: SYDNEY_TIME_ZONE,
       };
