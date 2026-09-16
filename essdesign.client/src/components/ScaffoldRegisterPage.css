@@ -838,3 +838,41 @@
 .scaffold-card-document .scaffold-register-add-cell.is-empty { grid-column:3 / 5; justify-self:end; }
 .scaffold-card-document .scaffold-register-add-cell.is-linked { grid-column:3; justify-self:end; }
 .scaffold-card-document .scaffold-register-document-link { justify-self:end; }
+
+/* Keep the register surface consistent while records load. */
+.scaffold-register-cards-wrap,
+.scaffold-register-page .scaffold-register-loading.page-loading-brandmark {
+    background:transparent;
+}
+.scaffold-register-cards-wrap.is-loading { overflow:hidden; }
+.scaffold-register-page .scaffold-register-loading.page-loading-brandmark {
+    min-height:260px;
+    height:100%;
+}
+.scaffold-register-action-bar .scaffold-register-add {
+    height:40px;
+    padding:0 16px;
+    gap:8px;
+    border:1px solid #1764d5;
+    border-radius:7px;
+    background:#1764d5;
+    color:#fff;
+    font:inherit;
+    font-size:13px;
+    font-weight:600;
+    line-height:1;
+    box-shadow:0 1px 2px rgba(15,23,42,.08);
+    transition:background-color 140ms ease, border-color 140ms ease;
+}
+.scaffold-register-action-bar .scaffold-register-add:hover:not(:disabled) {
+    background:#1253b5;
+    border-color:#1253b5;
+}
+.scaffold-register-action-bar .scaffold-register-add:focus-visible {
+    outline:3px solid #bfdbfe;
+    outline-offset:3px;
+}
+.scaffold-register-action-bar .scaffold-register-add:disabled { opacity:.45; box-shadow:none; }
+@media(prefers-reduced-motion:reduce) {
+    .scaffold-register-action-bar .scaffold-register-add { transition:none; }
+}
