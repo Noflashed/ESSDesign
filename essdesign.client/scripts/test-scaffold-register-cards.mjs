@@ -21,6 +21,25 @@ try {
   await page.setViewportSize({width,height:1000});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No page overflow');
  }
+ await page.setViewportSize({width:1440,height:1000});
+ await page.getByRole('heading',{name:'Sample Scaffold',exact:true}).click();
+ const dialog = page.getByRole('dialog',{name:'Sample Scaffold details'});
+ await dialog.waitFor();
+ const box = await dialog.boundingBox();
+ assert.ok(box.width > 600);
+ assert.ok(Math.abs(box.x + box.width / 2 - 720) < 2, 'Dialog centered horizontally');
+ assert.ok(Math.abs(box.y + box.height / 2 - 500) < 2, 'Dialog centered vertically');
+ await page.keyboard.press('Escape');
+ await dialog.waitFor({state:'hidden'});
+ const card = page.locator('.scaffold-register-card').first();
+ await card.focus();
+ await page.keyboard.press('Enter');
+ await dialog.waitFor();
+ await dialog.getByRole('button',{name:'Close scaffold details'}).click();
+ await dialog.waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'Actions for Sample Scaffold',exact:true}).click();
+ assert.equal(await page.locator('.scaffold-card-dialog').count(),0);
+ await page.keyboard.press('Escape');
  assert.deepEqual(errors,[]);
  console.log('PASS: six sample cards, lifecycle counts, overdue state, filtering and responsive widths');
 } finally {await browser.close();}

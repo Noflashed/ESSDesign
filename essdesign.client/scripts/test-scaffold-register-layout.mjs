@@ -59,9 +59,9 @@ try {
             await action.scrollIntoViewIfNeeded();
             const dimensions = await action.evaluate(button => {
                 const rect = button.getBoundingClientRect();
-                const icon = button.querySelector('svg').getBoundingClientRect();
+                const icon = getComputedStyle(button.querySelector('svg'));
                 const cell = button.closest('.scaffold-card-document');
-                return { iconWidth: icon.width, iconHeight: icon.height,
+                return { iconWidth: parseFloat(icon.width), iconHeight: parseFloat(icon.height),
                     rightGap: cell.getBoundingClientRect().right - rect.right,
                     cellPadding: parseFloat(getComputedStyle(cell).paddingRight) };
             });

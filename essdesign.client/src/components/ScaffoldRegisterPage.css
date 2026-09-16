@@ -922,3 +922,34 @@
     }
     .scaffold-card-qr:hover img { transform:none; }
 }
+
+.scaffold-register-card { cursor:pointer; transition:transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease; transform-origin:center; }
+.scaffold-register-card-grid { padding:5px; }
+@media(hover:hover) and (pointer:fine) {
+    .scaffold-register-card:not(.is-expanded):hover { transform:scale(1.015); position:relative; z-index:1; }
+}
+.scaffold-register-card:focus-visible { outline:2px solid #1764d5; outline-offset:2px; }
+.scaffold-card-dialog { position:fixed; inset:0; margin:auto; width:min(760px,calc(100vw - 32px)); max-width:none; max-height:calc(100dvh - 40px); padding:0; border:0; border-radius:16px; background:var(--card-bg,#fff); color:var(--text-primary,#142b45); overflow:auto; box-shadow:0 24px 80px #0f172a40; }
+.scaffold-card-dialog::backdrop { background:rgba(15,23,42,.4); }
+.scaffold-card-dialog[open] { animation:scaffold-card-expand 200ms ease-out; }
+.scaffold-card-dialog-panel { position:relative; }
+.scaffold-card-dialog-close { position:absolute; right:16px; top:14px; z-index:2; display:grid; place-items:center; width:32px; height:32px; border:0; border-radius:6px; background:var(--bg-secondary,#f4f4f5); color:var(--text-secondary,#52525b); cursor:pointer; }
+.scaffold-card-dialog .scaffold-register-card { cursor:default; padding:56px 32px 28px; border:0; border-radius:16px; box-shadow:none; transform:none; }
+.scaffold-card-dialog .scaffold-card-name h2 { font-size:24px; }
+.scaffold-card-dialog .scaffold-card-name p { font-size:14px; }
+.scaffold-card-dialog .scaffold-card-qr, .scaffold-card-dialog .scaffold-card-qr img { width:88px; }
+.scaffold-card-dialog .scaffold-card-qr img { height:96px; }
+.scaffold-card-dialog .scaffold-card-metadata { margin:28px 0 18px; }
+.scaffold-card-dialog .scaffold-card-metadata dd { font-size:20px; }
+.scaffold-card-dialog .scaffold-card-document { min-height:52px; font-size:14px; }
+.scaffold-card-dialog .scaffold-register-document-link { font-size:14px; }
+@keyframes scaffold-card-expand { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:scale(1); } }
+@media(max-width:600px) {
+    .scaffold-card-dialog .scaffold-register-card { padding:54px 18px 22px; }
+    .scaffold-card-dialog .scaffold-card-name h2 { font-size:19px; }
+    .scaffold-card-dialog .scaffold-card-document, .scaffold-card-dialog .scaffold-register-document-link { font-size:12px; }
+}
+@media(prefers-reduced-motion:reduce) {
+    .scaffold-register-card, .scaffold-card-dialog, .scaffold-card-dialog * { animation:none !important; transition:none !important; }
+    .scaffold-register-card:not(.is-expanded):hover { transform:none; }
+}
