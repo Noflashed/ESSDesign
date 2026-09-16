@@ -9,14 +9,14 @@ try {
  await page.locator('.monthly-reports-link').first().click();
  await page.locator('.monthly-report-card').first().waitFor();
  assert.equal(await page.locator('.monthly-report-card').count(),4);
- assert.equal(await page.locator('.monthly-report-card strong').last().innerText(),'December Inspection Report');
+ assert.equal(await page.locator('.monthly-report-card strong').last().innerText(),'December 2026 Inspection Report');
  assert.equal(await page.locator('.monthly-report-card small').last().innerText(),'16/12/2026 9:30 am');
  for(const width of [1440,1024,390]) {
   await page.setViewportSize({width,height:1000});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Report list fits viewport');
  }
  await page.setViewportSize({width:1440,height:1000});
- await page.getByRole('button',{name:/December Inspection Report/}).click();
+ await page.getByRole('button',{name:/December 2026 Inspection Report/}).click();
  const editor=page.getByRole('dialog',{name:'Inspection Report form',exact:true});
  await editor.waitFor();
  await editor.getByText('Maloo Inspection Report',{exact:true}).first().waitFor();
