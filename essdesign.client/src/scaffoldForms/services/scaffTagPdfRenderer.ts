@@ -1,4 +1,4 @@
-import {formatScaffoldDate, scaffoldInspectionDueDate} from '../utils/scaffoldDateDisplay';
+import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/services/scaffTagPdfRenderer.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
 import type {
   InspectionRecordEntry,
@@ -271,6 +271,7 @@ export function buildScaffTagPdfDocument(
   const fieldX = frontX + panelInset + labelWidth;
   const fieldWidth = cardWidth - panelInset * 2 - labelWidth;
   const detailRows: Array<[string, string]> = [
+    ['Client:', form.builderName],
     ['Location:', form.jobLocation || form.projectName],
     ['Scaffold:', form.scaffoldNo],
     ['Ref. No.:', `No. ${form.tagNumber}`],
@@ -312,22 +313,6 @@ export function buildScaffTagPdfDocument(
   drawText(frontX + 143, top + 42, 6.2, 'MATERIALS.', true, '1 1 1');
   top += 84;
 
-  line(frontX + panelInset, top, frontX + cardWidth - panelInset, top);
-  drawText(frontX + panelInset, top + 7, 7.2, 'SCAFFOLD COMPONENTS COMPLETE', true, '1 1 1');
-  const checks: Array<[string, boolean]> = [
-    ['HANDRAILS', form.checkHandrails], ['PLATFORM', form.checkPlatform],
-    ['MID RAILS', form.checkMidRails], ['LADDER', form.checkLadder],
-    ['TOE BOARDS', form.checkToeBoards], ['OTHER', form.checkOther],
-  ];
-  checks.forEach(([label, checked], index) => {
-    const column = index % 3;
-    const row = Math.floor(index / 3);
-    const checkX = frontX + panelInset + column * 84;
-    checkbox(checkX, top + 20 + row * 18, checked);
-    drawText(checkX + 15, top + 23 + row * 18, 5.9, label, true, '1 1 1');
-  });
-  top += 61;
-
   // Front inspection table.
   fill('1 1 1');
   fillRect(frontX, top, cardWidth, 25);
@@ -355,7 +340,7 @@ export function buildScaffTagPdfDocument(
     const row = form.inspectionRecords[index] ?? ({date: '', time: '', competentPerson: ''} as InspectionRecordEntry);
     const rowTop = top + tableHeaderHeight + index * inspectionRowHeight;
     line(frontX, rowTop + inspectionRowHeight, frontX + cardWidth, rowTop + inspectionRowHeight);
-    centeredText(frontX, rowTop + 8.5, columns[0], 6.2, clean(row.date ? formatScaffoldDate(row.date) : scaffoldInspectionDueDate(form.dateErected, index), 12), Boolean(row.date), row.date ? INK : '0.48 0.50 0.53');
+    centeredText(frontX, rowTop + 8.5, columns[0], 6.2, clean(row.date ? formatScaffoldDate(row.date) : '', 12), true);
     centeredText(frontX + columns[0], rowTop + 8.5, columns[1], 6.2, clean(row.time, 10), true);
     centeredText(frontX + columns[0] + columns[1], rowTop + 8.5, columns[2], 6.2, clean(row.competentPerson, 20), true);
     out.push(...drawSignature(frontX + columns[0] + columns[1] + columns[2] + 3, rowTop + 1.5, columns[3] - 6, 22, row.signatureStrokes));

@@ -1,4 +1,4 @@
-import {formatScaffoldDate, scaffoldInspectionDueDate, nextScaffoldInspectionDueDate} from '../utils/scaffoldDateDisplay';
+import {formatScaffoldDate, nextScaffoldInspectionDueDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/services/supabaseScaffTags.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
 import {resolveScaffoldFormStatus, ScaffoldFormStatus} from '../utils/scaffoldFormStatus';
 import type {ScaffoldRegisterRecord} from './supabaseScaffoldRegister';
@@ -363,8 +363,8 @@ function loadRatingLabel(value: LoadRating): string {
 function renderScaffTagHtml(form: ScaffTagForm): string {
   const inspections = form.inspectionRecords
     .map(
-      (row, index) =>
-        `<tr><td style="${row.date ? '' : 'opacity:0.55'}">${esc(row.date ? formatScaffoldDate(row.date) : scaffoldInspectionDueDate(form.dateErected, index))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${esc(
+      row =>
+        `<tr><td>${esc(formatScaffoldDate(row.date || ''))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${esc(
           row.note,
         )}</td></tr>`,
     )
@@ -399,6 +399,7 @@ function renderScaffTagHtml(form: ScaffTagForm): string {
     <h1>SCAFFOLD INSPECTION</h1>
     <p class="sub">Builder: ${esc(form.builderName)} | Project: ${esc(form.projectName)}</p>
     <div class="grid">
+      <div class="field full"><div class="label">Client</div><div class="value">${esc(form.builderName)}</div></div>
       <div class="field"><div class="label">Reference Number</div><div class="value">${esc(form.tagNumber)}</div></div>
       <div class="field"><div class="label">Scaffold Name</div><div class="value">${esc(form.scaffoldNo)}</div></div>
       <div class="field"><div class="label">Job Location</div><div class="value">${esc(form.jobLocation)}</div></div>
@@ -413,13 +414,6 @@ function renderScaffTagHtml(form: ScaffTagForm): string {
       <div class="field"><div class="label">Load Rating</div><div class="value">${esc(
         loadRatingLabel(form.loadRating),
       )} ${form.loadRating === 'OTHER' ? `- ${esc(form.loadRatingOther)}` : ''}</div></div>
-      <div class="field full"><div class="label">Complete Items</div><div class="value">Handrails: ${
-        form.checkHandrails ? 'Yes' : 'No'
-      } | Platform: ${form.checkPlatform ? 'Yes' : 'No'} | Mid Rails: ${form.checkMidRails ? 'Yes' : 'No'} | Ladder: ${
-    form.checkLadder ? 'Yes' : 'No'
-  } | Toe Boards: ${form.checkToeBoards ? 'Yes' : 'No'} | Other: ${form.checkOther ? 'Yes' : 'No'} ${esc(
-    form.checkOtherText,
-  )}</div></div>
       <div class="field full"><div class="label">Inspection Record</div>
         <table>
           <thead><tr><th>Date</th><th>Time</th><th>Competent Person</th><th>Compliance Note</th></tr></thead>
@@ -504,6 +498,7 @@ export function buildScaffTagPdfBlob(form: ScaffTagForm): Blob {
   const fieldGap = 22;
   const fields = [
     `SCAFFOLD NAME: ${val(form.scaffoldNo, 30)}`,
+    `CLIENT: ${val(form.builderName, 30)}`,
     `JOB LOCATION: ${val(form.jobLocation, 28)}`,
     `DATE ERECTED: ${val(formatScaffoldDate(form.dateErected), 12)}`,
     `REQUESTED BY: ${val(form.requestedBy, 28)}`,
@@ -535,37 +530,6 @@ export function buildScaffTagPdfBlob(form: ScaffTagForm): Blob {
   contentLines.push(text(lx + 210, lrY - 76, 12, form.loadRating === 'SEE_ENGINEERING' ? 'X' : '', 'F2'));
   contentLines.push(text(lx + 210, lrY - 94, 12, form.loadRating === 'OTHER' ? 'X' : '', 'F2'));
 
-  const ciY = lrY - 125;
-  contentLines.push(text(lx + 60, ciY, 12, 'CHECK COMPLETE ITEMS', 'F2'));
-  const checksLeft = [
-    ['HANDRAILS', form.checkHandrails],
-    ['MID RAILS', form.checkMidRails],
-    ['TOE BOARDS', form.checkToeBoards],
-  ] as const;
-  const checksRight = [
-    ['PLATFORM', form.checkPlatform],
-    ['LADDER', form.checkLadder],
-    ['OTHER', form.checkOther],
-  ] as const;
-
-  checksLeft.forEach(([label, checked], i) => {
-    const y = ciY - 24 - i * 20;
-    contentLines.push(rect(lx, y - 3, 12, 12));
-    contentLines.push(text(lx + 16, y, 10, label, 'F2'));
-    if (checked) {
-      contentLines.push(text(lx + 2, y - 1, 12, 'X', 'F2'));
-    }
-  });
-  checksRight.forEach(([label, checked], i) => {
-    const y = ciY - 24 - i * 20;
-    contentLines.push(rect(lx + 155, y - 3, 12, 12));
-    contentLines.push(text(lx + 171, y, 10, label, 'F2'));
-    if (checked) {
-      contentLines.push(text(lx + 157, y - 1, 12, 'X', 'F2'));
-    }
-  });
-  contentLines.push(line(lx, panelY + 52, lx + panelW - 36, panelY + 52));
-  contentLines.push(text(lx, panelY + 36, 10, `OTHER: ${val(form.checkOtherText, 36)}`, 'F2'));
   contentLines.push(text(lx + 10, panelY + 12, 9, 'SEE OTHER SIDE FOR INSPECTION RECORD', 'F2'));
 
   // Right side: inspection record tag
@@ -609,7 +573,7 @@ export function buildScaffTagPdfBlob(form: ScaffTagForm): Blob {
     };
     contentLines.push('q');
     if (!row.date) { contentLines.push('0.48 0.50 0.53 rg'); }
-    contentLines.push(centeredText(tableX, dateCol, y - 18, 10, val(row.date ? formatScaffoldDate(row.date) : scaffoldInspectionDueDate(form.dateErected, i), 12), 'F1'));
+    contentLines.push(centeredText(tableX, dateCol, y - 18, 10, val(formatScaffoldDate(row.date || ''), 12), 'F1'));
     contentLines.push('Q');
     contentLines.push(centeredText(tableX + dateCol, timeCol, y - 18, 9, val(row.time, 10), 'F1'));
     contentLines.push(text(tableX + dateCol + timeCol + 6, y - 18, 10, val(row.competentPerson, 24), 'F1'));

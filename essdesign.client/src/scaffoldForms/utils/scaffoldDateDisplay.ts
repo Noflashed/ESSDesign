@@ -20,10 +20,22 @@ export function scaffoldInspectionDueDate(initialDate: string, rowIndex: number)
   return `${String(Math.min(day, lastDay)).padStart(2, '0')}/${String(target.getUTCMonth() + 1).padStart(2, '0')}/${target.getUTCFullYear()}`;
 }
 
-/** Match the first unfilled inspection row on the card without creating a record. */
+/** Due one calendar month after the latest recorded inspection, or erection if none. */
 export function nextScaffoldInspectionDueDate(initialDate: string, records: Array<{date?: string}> = []): string {
-  const nextIndex = records.findIndex(row => !row.date?.trim());
-  return scaffoldInspectionDueDate(initialDate, nextIndex < 0 ? records.length : nextIndex);
+  let latestDate = '';
+  let latestDay = -Infinity;
+  for (const row of records) {
+    const date = row.date?.trim() || '';
+    // Reuse the calendar validation so malformed legacy dates cannot extend the timer.
+    if (!scaffoldInspectionDueDate(date, 0)) { continue; }
+    const [day, month, year] = formatScaffoldDate(date).split('/').map(Number);
+    const calendarDay = Date.UTC(year, month - 1, day);
+    if (calendarDay > latestDay) {
+      latestDay = calendarDay;
+      latestDate = date;
+    }
+  }
+  return scaffoldInspectionDueDate(latestDate || initialDate, 0);
 }
 
 /** Compare Sydney calendar days so daylight saving cannot change the day count. */

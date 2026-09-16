@@ -603,15 +603,13 @@ public static class ScaffTagPublicPageRenderer
     .rule { margin-top:6px; padding-top:8px; border-top:1px solid #b8d9c7; }
     .fall { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#fff; font-size:11px; font-weight:900; text-transform:uppercase; }
     .choices { display:flex; gap:12px; }
-    .choice, .component { display:flex; align-items:center; gap:5px; }
+    .choice { display:flex; align-items:center; gap:5px; }
     .box { width:18px; height:18px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; border:1px solid #b8d9c7; background:#fff; color:var(--green); font-size:14px; line-height:1; font-weight:900; }
     .load-grid { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr); gap:10px; color:#fff; }
     .load-list { display:grid; gap:4px; }
     .load-row { min-height:21px; display:flex; align-items:center; justify-content:space-between; gap:7px; font-size:11px; line-height:1.15; font-weight:900; }
     .load-note { font-size:9px; line-height:1.4; letter-spacing:.15px; font-weight:900; text-transform:uppercase; }
     .other-value { grid-column:1/-1; padding:5px 7px; background:#fff; color:var(--ink); font-size:10px; font-weight:750; }
-    .components-title { color:#fff; font-size:11px; letter-spacing:.25px; font-weight:900; text-transform:uppercase; }
-    .components-grid { margin-top:6px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px 5px; color:#fff; font-size:9px; line-height:1.2; font-weight:850; text-transform:uppercase; }
     .section-title { min-height:34px; display:flex; align-items:center; justify-content:center; padding:5px; background:#fff; border-bottom:1px solid var(--line); font-size:17px; letter-spacing:.45px; font-weight:900; text-align:center; }
     table { width:100%; border-collapse:collapse; table-layout:fixed; background:#fff; }
     th, td { height:36px; padding:4px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); color:var(--ink); font-size:9px; line-height:1.15; font-weight:800; text-align:center; overflow-wrap:anywhere; }
@@ -720,17 +718,6 @@ public static class ScaffTagPublicPageRenderer
       const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       return iso ? `${iso[3]}/${iso[2]}/${iso[1]}` : text;
     };
-    const inspectionDueDate = index => {
-      const parts = displayDate(tag.dateErected).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-      if (!parts) return '';
-      const [, dayText, monthText, yearText] = parts;
-      const year = Number(yearText), month = Number(monthText) - 1, day = Number(dayText);
-      const initial = new Date(Date.UTC(year, month, day));
-      if (initial.getUTCFullYear() !== year || initial.getUTCMonth() !== month || initial.getUTCDate() !== day) return '';
-      const target = new Date(Date.UTC(year, month + index + 1, 1));
-      const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
-      return `${String(Math.min(day, lastDay)).padStart(2, '0')}/${String(target.getUTCMonth() + 1).padStart(2, '0')}/${target.getUTCFullYear()}`;
-    };
     const checked = value => `<span class="box" aria-hidden="true">${value ? '✓' : ''}</span>`;
     const signature = (strokes, inline = false) => {
       if (!Array.isArray(strokes) || strokes.length === 0) return '<span></span>';
@@ -760,7 +747,6 @@ public static class ScaffTagPublicPageRenderer
       : { logo:essLogo, legal:'Erect Safe Scaffolding (Sydney) Pty Ltd', address:'130 Gilba Road, Girraween NSW 2145', phone:'(02) 8818 3690' };
     const inspectionRows = count => Array.from({length:count}, (_, index) => tag.inspectionRecords?.[index] || {});
     const loadRow = (key, label) => `<div class="load-row"><span>${label}</span>${checked(tag.loadRating === key)}</div>`;
-    const component = (label, value) => `<div class="component">${checked(value)}<span>${label}</span></div>`;
 
     function renderDocumentNavigation() {
       const navigation = document.getElementById('documentNavigation');
@@ -775,17 +761,17 @@ public static class ScaffTagPublicPageRenderer
 
     function renderFront() {
       const entity = company();
-      const rows = inspectionRows(10).map((row, index) => `<tr><td style="${row.date ? '' : 'opacity:0.55'}">${esc(row.date ? displayDate(row.date) : inspectionDueDate(index))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${signature(row.signatureStrokes)}</td></tr>`).join('');
+      const rows = inspectionRows(10).map(row => `<tr><td>${esc(displayDate(row.date))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${signature(row.signatureStrokes)}</td></tr>`).join('');
       return `<article class="tag">
         <header class="brand"><img src="${entity.logo}" alt="${esc(entity.legal)}" /><div class="brand-copy"><div class="brand-title">SCAFFOLD TAG</div><div class="brand-sub">${esc(entity.address)}</div><div class="brand-company">${esc(entity.legal)} · ${esc(entity.phone)}</div></div></header>
         <div class="band">ERECTION AND INSPECTION RECORD</div>
         <section class="details">
+          <div class="field-row"><span class="field-label">Client:</span><span class="field-value">${esc(tag.builderName)}</span></div>
           <div class="field-row"><span class="field-label">Location:</span><span class="field-value">${esc(tag.projectName || tag.jobLocation)}</span></div>
           <div class="field-row"><span class="field-label">Scaffold:</span><span class="field-value">${esc(tag.scaffoldName)}</span></div>
           <div class="field-row"><span class="field-label">Ref. No.:</span><span class="field-value">No. ${esc(tag.tagNumber)}</span></div>
           <div class="rule fall"><span>Fall protection required</span><span class="choices"><span class="choice">${checked(tag.fallProtectionRequired === 'YES')}YES</span><span class="choice">${checked(tag.fallProtectionRequired === 'NO')}NO</span></span></div>
           <div class="rule load-grid"><div class="load-list">${loadRow('LIGHT_DUTY','Light Duty 225KG')}${loadRow('MEDIUM_DUTY','Medium Duty 450KG')}${loadRow('HEAVY_DUTY','Heavy Duty 675KG')}${loadRow('SEE_ENGINEERING','See Engineering Drawing')}${loadRow('OTHER','Other')}</div><div class="load-note">THE ABOVE WEIGHTS ARE FOR ONE WORKING PLATFORM ONLY AND INCLUDES MEN AND MATERIALS.</div>${tag.loadRating === 'OTHER' ? `<div class="other-value">${esc(tag.loadRatingOther)}</div>` : ''}</div>
-          <div class="rule"><div class="components-title">Scaffold components complete</div><div class="components-grid">${component('Handrails',tag.checkHandrails)}${component('Platform',tag.checkPlatform)}${component('Mid rails',tag.checkMidRails)}${component('Ladder',tag.checkLadder)}${component('Toe boards',tag.checkToeBoards)}${component('Other',tag.checkOther)}</div>${tag.checkOther && tag.checkOtherText ? `<div class="other-value" style="margin-top:7px">${esc(tag.checkOtherText)}</div>` : ''}</div>
         </section>
         <div class="section-title">AUTHORISED PERSON</div>
         <table aria-label="Authorised person inspection records"><thead><tr><th class="auth-date">DATE</th><th class="auth-time">TIME</th><th class="auth-name">NAME</th><th class="auth-sign">SIGNATURE</th></tr></thead><tbody>${rows}</tbody></table>

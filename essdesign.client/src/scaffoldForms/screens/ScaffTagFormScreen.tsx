@@ -1,4 +1,4 @@
-import {formatScaffoldDate, scaffoldInspectionDueDate} from '../utils/scaffoldDateDisplay';
+import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/screens/ScaffTagFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
 import React from 'react';
 import {adaptScaffTagStyles} from '../browser/scaffTagStyles';
@@ -28,7 +28,6 @@ import {useFolders} from '../context/FolderContext';
 import {useAuth} from '../context/AuthContext';
 import {BorderRadius, Colors, FontSize, Spacing, getTheme} from '../theme/appTheme';
 import AppTopBar from '../components/AppTopBar';
-import ScaffTagInspectionHint from '../components/ScaffTagInspectionHint';
 import CompanyEntitySelector from '../components/CompanyEntitySelector';
 import SignaturePadModal, {SignaturePadStroke} from '../components/SignaturePadModal';
 import SideMenuDrawer from '../components/SideMenuDrawer';
@@ -169,12 +168,6 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
   const [tagNumberPreview, setTagNumberPreview] = React.useState('');
   const [existingPhotos, setExistingPhotos] = React.useState<ExistingPhoto[]>([]);
   const [pendingPhotos, setPendingPhotos] = React.useState<PendingPhoto[]>([]);
-  const inspectionGuideContainerRef = React.useRef<View>(null);
-  const inspectionColumnRef = React.useRef<Text>(null);
-  const inspectionColumnEndRef = React.useRef<View | null>(null);
-  const inspectionTargetRef = React.useRef<View | null>(null);
-  const inspectionScrollRef = React.useRef<ScrollView>(null);
-  const inspectionScrollOffsetRef = React.useRef(0);
   const frontCardRef = React.useRef<View>(null);
   const backCardRef = React.useRef<View>(null);
   const initialHandoverFormIdRef = React.useRef(route.params.initialHandoverFormId ?? '');
@@ -213,14 +206,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
     })),
   });
   const isReadOnly = route.params.readOnly === true;
-  const [inspectionHintDismissed, setInspectionHintDismissed] = React.useState(false);
   const nextInspectionIndex = form.inspectionRecords.findIndex(row => !row.date);
-  const nextInspectionDueDate = nextInspectionIndex < 0 ? '' : scaffoldInspectionDueDate(form.dateErected, nextInspectionIndex);
-  const showInspectionHint = Boolean(route.params.formId && !loading && !isReadOnly && !inspectionHintDismissed && nextInspectionDueDate);
-  React.useEffect(() => {
-    setInspectionHintDismissed(false);
-    return navigation.addListener?.('focus', () => setInspectionHintDismissed(false));
-  }, [navigation, route.params.formId]);
 
   const isScaffoldRegisterLinked = Boolean(scaffoldRegisterId.trim());
   const company = getCompanyEntity(form.companyEntityId);
@@ -640,7 +626,6 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
     if (isReadOnly) {
       return;
     }
-    setInspectionHintDismissed(true);
     const parts = getSydneyDateTimeParts();
     setForm(previous => {
       const inspectionRecords = [...previous.inspectionRecords];
@@ -916,7 +901,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
   }
 
   return (
-    <View ref={inspectionGuideContainerRef} collapsable={false} style={styles.container}>
+    <View collapsable={false} style={styles.container}>
       <StatusBar
         barStyle={prefs.themeMode === 'dark' ? 'light-content' : 'dark-content'}
         backgroundColor={theme.card}
@@ -972,9 +957,6 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
       </View>
 
       <ScrollView
-        ref={inspectionScrollRef}
-        onScroll={event => { inspectionScrollOffsetRef.current = event.nativeEvent.contentOffset.y; }}
-        scrollEventThrottle={16}
         testID={usesIOSDocumentEditor ? 'ess-scaff-tag-stable-scroll-pager' : undefined}
         style={usesIOSDocumentEditor ? styles.iOSTagPager : undefined}
         contentContainerStyle={usesIOSDocumentEditor ? styles.iOSTagPagerContent : styles.scroll}
@@ -1037,6 +1019,12 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                 </View>
 
                 <View style={styles.tagDetailPanel}>
+                  <View style={styles.refFieldRow}>
+                    <Text style={styles.refFieldLabel}>Client:</Text>
+                    <View style={styles.refFieldBox}>
+                      <Text style={styles.refFieldBoxText}>{route.params.builderName}</Text>
+                    </View>
+                  </View>
                   <View style={styles.refFieldRow}>
                     <Text style={styles.refFieldLabel}>Location:</Text>
                     <View style={styles.refFieldBox}>
@@ -1146,68 +1134,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                     </Text>
                   </View>
 
-                  <View style={styles.componentChecksPanel}>
-                    <Text style={styles.componentChecksTitle}>Scaffold components complete</Text>
-                    <View style={styles.componentChecksGrid}>
-                      {(
-                        [
-                          ['Handrails', 'checkHandrails'],
-                          ['Platform', 'checkPlatform'],
-                          ['Mid rails', 'checkMidRails'],
-                          ['Ladder', 'checkLadder'],
-                          ['Toe boards', 'checkToeBoards'],
-                          ['Other', 'checkOther'],
-                        ] as Array<
-                          [
-                            string,
-                            keyof Pick<
-                              FormState,
-                              | 'checkHandrails'
-                              | 'checkPlatform'
-                              | 'checkMidRails'
-                              | 'checkLadder'
-                              | 'checkToeBoards'
-                              | 'checkOther'
-                            >,
-                          ]
-                        >
-                      ).map(([label, key]) => (
-                        <TouchableOpacity
-                          key={key}
-                          accessibilityRole="checkbox"
-                          accessibilityState={{checked: form[key]}}
-                          style={styles.componentCheckChoice}
-                          disabled={isReadOnly}
-                          onPress={() =>
-                            setForm(previous => ({
-                              ...previous,
-                              [key]: !previous[key],
-                            }))
-                          }
-                        >
-                          <View style={styles.compactChoiceBox}>
-                            {form[key] ? <Text style={styles.compactChoiceMark}>✓</Text> : null}
-                          </View>
-                          <Text style={styles.componentCheckLabel}>{label}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                    {form.checkOther ? (
-                      <TextInput
-                        style={styles.componentOtherInput}
-                        {...inputEditableProps}
-                        value={form.checkOtherText}
-                        onChangeText={value =>
-                          setForm(previous => ({
-                            ...previous,
-                            checkOtherText: value,
-                          }))
-                        }
-                        placeholder="Describe other completed component"
-                        placeholderTextColor="#64748B"
-                      />
-                    ) : null}
-                  </View>
+
                 </View>
 
                 <View style={styles.authorisedHeader}>
@@ -1215,32 +1142,27 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                 </View>
                 <View style={styles.authorisedTable}>
                   <View style={styles.authorisedTableHeader}>
-                    <Text ref={inspectionColumnRef} style={[styles.authHeaderCell, styles.authDateCell]}>DATE</Text>
+                    <Text style={[styles.authHeaderCell, styles.authDateCell]}>DATE</Text>
                     <Text style={[styles.authHeaderCell, styles.authTimeCell]}>TIME</Text>
                     <Text style={[styles.authHeaderCell, styles.authNameCell]}>NAME</Text>
                     <Text style={[styles.authHeaderCell, styles.authSignatureCell]}>SIGNATURE</Text>
                   </View>
                   {form.inspectionRecords.map((row, index) => {
                     const isActive = inspectionRowHasContent(row);
-                    const dueDate = scaffoldInspectionDueDate(form.dateErected, index);
                     return (
                       <View key={`front-auth-${index}`} style={styles.authorisedTableRow}>
                         <View
                           collapsable={false}
-                          ref={node => {
-                            if (index === nextInspectionIndex) { inspectionTargetRef.current = node; }
-                            if (index === form.inspectionRecords.length - 1) { inspectionColumnEndRef.current = node; }
-                          }}
                           style={[styles.authCellButton, styles.authDateCell]}>
-                          {!row.date ? (
+                          {!row.date && index === nextInspectionIndex && !isReadOnly ? (
                             <TouchableOpacity
                               accessibilityRole="button"
-                              accessibilityLabel={`Inspection ${index + 1} due ${dueDate}. Record inspection now`}
+                              accessibilityLabel={`Record inspection ${index + 1} now`}
                               disabled={isReadOnly}
-                              style={[styles.inspectionDueButton, showInspectionHint && index === nextInspectionIndex && styles.inspectionDueHighlighted]}
+                              style={styles.inspectionAddButton}
                               onPress={() => autofillInspectionRow(index)}
                             >
-                              <Text style={[styles.authCellText, styles.inspectionDueText]}>{dueDate}</Text>
+                              <Feather name="plus" size={18} color="#FFFFFF" />
                             </TouchableOpacity>
                           ) : (
                             <Text style={styles.authCellText}>{formatScaffoldDate(row.date || '')}</Text>
@@ -1450,19 +1372,6 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
           </TouchableOpacity>
         ) : null}
       </ScrollView>
-
-      {showInspectionHint && (
-        <ScaffTagInspectionHint
-          date={nextInspectionDueDate}
-          containerRef={inspectionGuideContainerRef}
-          columnRef={inspectionColumnRef}
-          columnEndRef={inspectionColumnEndRef}
-          targetRef={inspectionTargetRef}
-          onInspect={() => autofillInspectionRow(nextInspectionIndex)}
-          onDismiss={() => setInspectionHintDismissed(true)}
-          onReveal={offset => inspectionScrollRef.current?.scrollTo({y: Math.max(0, inspectionScrollOffsetRef.current + offset), animated: true})}
-        />
-      )}
 
       <SideMenuDrawer
         visible={showDrawer}
@@ -1862,54 +1771,6 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       paddingHorizontal: 7,
       paddingVertical: 4,
     },
-    componentChecksPanel: {
-      marginTop: 8,
-      paddingTop: 8,
-      borderTopWidth: 1,
-      borderTopColor: '#B8D9C7',
-    },
-    componentChecksTitle: {
-      color: '#FFFFFF',
-      fontSize: 12,
-      lineHeight: 16,
-      fontWeight: '900',
-      letterSpacing: 0.25,
-      textTransform: 'uppercase',
-    },
-    componentChecksGrid: {
-      marginTop: 6,
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      rowGap: 6,
-    },
-    componentCheckChoice: {
-      width: '33.3333%',
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-      paddingRight: 5,
-    },
-    componentCheckLabel: {
-      flex: 1,
-      color: '#FFFFFF',
-      fontSize: 10,
-      lineHeight: 13,
-      fontWeight: '800',
-      textTransform: 'uppercase',
-    },
-    componentOtherInput: {
-      minHeight: 30,
-      marginTop: 7,
-      backgroundColor: '#FFFFFF',
-      borderWidth: 1,
-      borderColor: '#B8D9C7',
-      color: '#111827',
-      fontSize: 11,
-      lineHeight: 15,
-      fontWeight: '700',
-      paddingHorizontal: 7,
-      paddingVertical: 4,
-    },
     authorisedHeader: {
       minHeight: 36,
       backgroundColor: '#FFFFFF',
@@ -1974,18 +1835,14 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       justifyContent: 'center',
       paddingHorizontal: 4,
     },
-    inspectionDueButton: {
-      flex: 1,
+    inspectionAddButton: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: '#0B7F45',
+      alignSelf: 'center',
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    inspectionDueHighlighted: {
-      backgroundColor: '#E8F6EF',
-      borderRadius: 4,
-    },
-    inspectionDueText: {
-      opacity: 0.55,
-      fontWeight: '500',
     },
     authCell: {
       borderRightWidth: 1,
