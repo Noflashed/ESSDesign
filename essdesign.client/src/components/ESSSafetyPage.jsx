@@ -1,1165 +1,1151 @@
-import FormSharedCheckbox from './FormSharedCheckbox';
-import {getProjectDataStatus} from '../utils/projectDataStatus';
-import {getScaffTagStatus} from '../utils/scaffTagStatus';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import {
-    AlertTriangle,
-    CheckCircle,
-    ChevronDown,
-    ClipboardCheck,
-    ExternalLink,
-    FileCheck,
-    FileText,
-    MoreVertical,
-    Tag,
-    Trash2,
-    Users,
-    X
-} from 'lucide-react';
-import { preStartsAPI, dayLabourVariationsAPI, handoverCertificatesAPI, scaffTagsAPI, safetyFilesAPI, safetyProjectsAPI } from '../services/api';
-import LoadingBrandmark from './LoadingBrandmark';
-import {RegisterDropdown} from './ScaffoldRegisterPage';
-import {ALL_SCOPE, ALL_BUILDERS, projectScopeOptions, resolveProjectScope, matchesProjectScope} from '../utils/projectDataScope';
+  FileText,
+  Plus,
+  Search,
+  X,
+  SlidersHorizontal,
+  Download,
+  MoreVertical,
+  ArrowUpRight,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ArrowDown,
+  Check,
+  Minus,
+} from "lucide-react";
+import { zipSync } from "fflate";
+import {
+  safetyProjectsAPI,
+  scaffTagsAPI,
+  handoverCertificatesAPI,
+  dayLabourVariationsAPI,
+  preStartsAPI,
+} from "../services/api";
+import {
+  mapScaffTagRows,
+  mapHandoverRows,
+  mapDayLabourVariationRows,
+  mapPreStartRows,
+} from "../utils/projectDataDocuments";
+import {
+  ALL_SCOPE,
+  ALL_BUILDERS,
+  projectScopeOptions,
+  resolveProjectScope,
+  matchesProjectScope,
+} from "../utils/projectDataScope";
+import { isFormShared } from "../utils/projectDataStatus";
+import { normalizeCompanyEntityId } from "../scaffoldForms/config/companyEntities";
+import ScaffoldFormEditor from "./ScaffoldFormEditor";
+import LoadingBrandmark from "./LoadingBrandmark";
+import "./ProjectFilesPage.css";
 
-const PROJECT_DATA_TABS = [
-    {
-        key: 'scaff-tags',
-        label: 'Scaff-tags',
-        noun: 'scaffold tags',
-        refLabel: 'Tag / Ref No.',
-        storageKind: 'scaff-tags',
-        icon: Tag
-    },
-    {
-        key: 'handover-certificates',
-        label: 'Handover certificates',
-        noun: 'handover certificates',
-        refLabel: 'Certificate / Ref No.',
-        storageKind: 'handover-certificates',
-        icon: ClipboardCheck
-    },
-    {
-        key: 'day-labour-variations',
-        label: 'Day Labour/Variations',
-        noun: 'day labour/variations',
-        refLabel: 'Variation / Ref No.',
-        storageKind: 'day-labour-variations',
-        icon: Users
-    },
-    {
-        key: 'pre-starts',
-        label: 'Pre-Starts',
-        noun: 'pre-start forms',
-        refLabel: 'Pre-Start No.',
-        storageKind: 'pre-starts',
-        icon: ClipboardCheck
-    },
+const TYPES = [
+  {
+    key: "scaff-tags",
+    label: "Scaff-tags",
+    api: scaffTagsAPI,
+    map: mapScaffTagRows,
+  },
+  {
+    key: "handover-certificates",
+    label: "Handovers",
+    api: handoverCertificatesAPI,
+    map: mapHandoverRows,
+  },
+  {
+    key: "day-labour-variations",
+    label: "Day Labour / Variations",
+    api: dayLabourVariationsAPI,
+    map: mapDayLabourVariationRows,
+  },
+  {
+    key: "pre-starts",
+    label: "Pre-starts",
+    api: preStartsAPI,
+    map: mapPreStartRows,
+  },
 ];
-
-const STATUS_META = {
-    Active: {icon: FileText, className: 'active'},
-    Dismantled: {icon: X, className: 'retired'},
-    Current: { className: 'current', icon: CheckCircle },
-    Retired: { className: 'retired', icon: X },
-    Expired: { className: 'expired', icon: AlertTriangle },
-    Draft: { className: 'draft', icon: FileText }
+const PAGE_SIZE = 7;
+const dateText = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : date.toLocaleDateString("en-AU", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
 };
-
-const toDate = (value) => {
-    if (!value) return null;
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
+const time = (value) => {
+  const n = Date.parse(value);
+  return Number.isNaN(n) ? 0 : n;
 };
-
-const formatDate = (value) => {
-    const date = toDate(value);
-    if (!date) return '-';
-    return new Intl.DateTimeFormat('en-AU', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-    }).format(date);
-};
-
-const formatDateTime = (value) => {
-    const date = toDate(value);
-    if (!date) return '-';
-    return new Intl.DateTimeFormat('en-AU', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    }).format(date);
-};
-
-const formatBytes = (value) => {
-    if (!Number.isFinite(value)) return '';
-    if (value < 1024) return `${value} B`;
-    if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
-    return `${(value / 1024 / 1024).toFixed(1)} MB`;
-};
-
-const makeFileRef = (prefix, index) => `${prefix}-${String(index + 1).padStart(5, '0')}`;
-
-const normaliseFileName = (name) => String(name || 'document.pdf').replace(/^\d+-/, '');
-
-const withPdfExtension = (value) => {
-    const name = String(value || 'Handover certificate').trim() || 'Handover certificate';
-    return name.toLowerCase().endsWith('.pdf') ? name : `${name}.pdf`;
-};
-
-function mapScaffTagRows(items) {
-    return items.map((item, index) => {
-        const tagNo = item.scaffoldNo || item.tagNumber || makeFileRef('TAG', index);
-        return {
-            id: item.id,
-            kind: 'scaff-tags',
-            name: `${tagNo}.pdf`,
-            ref: tagNo,
-            status: getScaffTagStatus(item),
-            uploadedAt: item.updatedAt || item.latestInspectionDate || '',
-            expiresAt: item.retiredAt || item.dismantledAt || '',
-            uploadedBy: item.inspectedBy || item.competentPerson || 'Site team',
-            location: item.jobLocation || '',
-            size: '',
-            raw: item
-        };
-    });
+const fileName = (doc) =>
+  `${doc.ref}-${doc.name}`
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")
+    .replace(/(?:\.pdf)?$/i, ".pdf");
+function Badge({ value }) {
+  return (
+    <span
+      className={`pf-badge pf-${String(value).toLowerCase().replaceAll(" ", "-")}`}
+    >
+      {["Active", "Current", "Shared"].includes(value) ? (
+        <Check size={12} />
+      ) : (
+        <Minus size={12} />
+      )}{" "}
+      {value}
+    </span>
+  );
 }
-
-function mapHandoverRows(items) {
-    return items.map((item, index) => {
-        const ref = item.inspectionNumber || item.formReferenceName || makeFileRef('HOC', index);
-        return {
-            id: item.id,
-            kind: 'handover-certificates',
-            name: withPdfExtension(item.formReferenceName || `Handover certificate ${ref}`),
-            ref,
-            status: getProjectDataStatus(item),
-            uploadedAt: item.updatedAt || item.inspectionDateTime || '',
-            expiresAt: '',
-            uploadedBy: item.essRepresentativeName || 'Site team',
-            location: item.projectNumberClient || '',
-            size: '',
-            raw: item
-        };
-    });
-}
-
-function mapDayLabourVariationRows(items) {
-    return items.map((item, index) => {
-        const ref = item.variationNumber || item.formReferenceName || makeFileRef('DLV', index);
-        const title = item.formReferenceName || `Day Labour/Variation ${ref}`;
-        return {
-            id: item.id,
-            kind: 'day-labour-variations',
-            name: withPdfExtension(title),
-            ref,
-            status: getProjectDataStatus(item),
-            uploadedAt: item.updatedAt || item.date || '',
-            expiresAt: '',
-            uploadedBy: item.createdByName || 'Not recorded',
-            location: item.clientProjectName || item.handoverDocumentTitle || '',
-            size: formatBytes(item.size),
-            raw: item
-        };
-    });
-}
-
-function mapPreStartRows(items) {
-    return items.map(item => ({
-        id: item.id,
-        kind: 'pre-starts',
-        name: withPdfExtension(item.subject || `Daily Pre-Start ${item.preStartNumber}`),
-        ref: item.preStartNumber || '-',
-        status: getProjectDataStatus(item),
-        uploadedAt: item.updatedAt || '',
-        expiresAt: '',
-        uploadedBy: item.representativeName || 'Site team',
-        location: item.clientProjectName || '',
-        size: formatBytes(item.size),
-        raw: item
-    }));
-}
-
-function mapFileRows(files, tab) {
-    const refPrefix = tab.key === 'swms'
-        ? 'SWMS'
-        : tab.key === 'handover-certificates'
-            ? 'HOC'
-            : tab.key === 'day-labour-variations'
-                ? 'DLV'
-                : 'DES';
-
-    return files.map((file, index) => ({
-        id: file.path,
-        kind: tab.key,
-        name: normaliseFileName(file.name),
-        ref: makeFileRef(refPrefix, index),
-        status: 'Current',
-        uploadedAt: file.updatedAt,
-        expiresAt: '',
-        uploadedBy: 'Project data',
-        location: '',
-        size: formatBytes(file.size),
-        raw: file
-    }));
-}
-
-function StatusChip({ status }) {
-    const meta = STATUS_META[status] || STATUS_META.Draft;
-    const Icon = meta.icon;
-    return (
-        <span className={`project-data-status ${meta.className}`}>
-            <Icon size={13} />
-            {status}
-        </span>
-    );
-}
-
-function BuilderDropdown({ builders, selectedBuilder, logoUrls, open, onToggle, onOpenChange, onSelect, dropdownRef }) {
-    return <RegisterDropdown label="Builder" selectedItem={selectedBuilder} items={builders}
-        getLabel={builder => builder.name} getLogoUrl={builder => logoUrls[builder.id] || builder.logoUrl || ''}
-        open={open} onOpenChange={next => {if (next) onToggle(); else onOpenChange(false);}} dropdownRef={dropdownRef}
-        onSelect={builder => onSelect(builder.id)} emptyText="No builders yet" />;
-}
-
-function ProjectDropdown({ projects, selectedProject, open, onToggle, onOpenChange, onSelect, disabled, dropdownRef }) {
-    return <RegisterDropdown label="Project" selectedItem={selectedProject} items={projects}
-        getLabel={project => project.name} showLogo={false}
-        open={open} onOpenChange={next => {if (next) onToggle(); else onOpenChange(false);}} dropdownRef={dropdownRef}
-        onSelect={project => onSelect(project.id)} disabled={disabled} emptyText="No active projects" />;
-}
-
-function DataTypeDropdown({ tabs, activeTab, open, onToggle, onSelect, dropdownRef }) {
-    const ActiveIcon = activeTab.icon;
-    return (
-        <div className="project-data-kind-dropdown" ref={dropdownRef}>
-            <button
-                type="button"
-                className="project-data-select-shell project-data-kind-trigger"
-                onClick={onToggle}
-                aria-haspopup="listbox"
-                aria-expanded={open}
-            >
-                <ActiveIcon size={19} />
-                <span>{activeTab.label}</span>
-                <ChevronDown size={18} />
-            </button>
-            {open ? (
-                <div className="project-data-kind-menu" role="listbox" aria-label="Project data type">
-                    {tabs.map(tab => {
-                        const Icon = tab.icon;
-                        return (
-                            <button
-                                key={tab.key}
-                                type="button"
-                                className={`project-data-kind-option${tab.key === activeTab.key ? ' selected' : ''}`}
-                                onClick={() => onSelect(tab.key)}
-                                role="option"
-                                aria-selected={tab.key === activeTab.key}
-                            >
-                                <Icon size={17} />
-                                <span>{tab.label}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            ) : null}
-        </div>
-    );
-}
-
-function TableHeaderFilter({ label, active, open, onToggle, children }) {
-    return (
-        <div className={`project-data-column-filter${active ? ' filtered' : ''}${open ? ' open' : ''}`}>
-            <button
-                type="button"
-                onClick={(event) => {
-                    event.stopPropagation();
-                    onToggle();
-                }}
-            >
-                <span>{label}</span>
-                <ChevronDown size={13} />
-            </button>
-            {open ? (
-                <div className="project-data-column-menu" onClick={event => event.stopPropagation()}>
-                    {children}
-                </div>
-            ) : null}
-        </div>
-    );
-}
-
-function getPreviewDetails(doc, tab, builder, project) {
-    const baseDetails = [
-        ['Builder', builder?.name || '-'],
-        ['Project', project?.name || '-'],
-        ['Uploaded by', doc.uploadedBy || '-'],
-        ['Date uploaded', formatDateTime(doc.uploadedAt)],
-        ...(['pre-starts', 'day-labour-variations'].includes(doc.kind) ? [] : [['Status', doc.status || '-']]),
-        ...(['pre-starts', 'day-labour-variations', 'handover-certificates', 'scaff-tags'].includes(doc.kind) ? [['Form Shared', <FormSharedCheckbox form={doc.raw} />]] : [])
-    ];
-
-    if (tab.key === 'scaff-tags') {
-        return [
-            ['Scaffold reference', doc.raw?.scaffoldNo || doc.raw?.tagNumber || doc.ref],
-            ['Tag / Ref No.', doc.ref],
-            ['QR label', doc.raw?.qrLabelNumber || 'Not linked'],
-            ['QR label status', doc.raw?.qrLabelStatus === 'retired'
-                ? 'Retired'
-                : doc.raw?.qrLabelStatus === 'assigned'
-                    ? 'Assigned'
-                    : 'Unassigned'],
-            ['Structure location', doc.location || project?.siteLocation || '-'],
-            ['Last inspection', formatDateTime(doc.raw?.latestInspectionDate || doc.uploadedAt)],
-            ...baseDetails
-        ];
-    }
-
-    if (tab.key === 'handover-certificates') {
-        return [
-            ['Form reference', doc.raw?.formReferenceName || doc.name],
-            ['Inspection no.', doc.raw?.inspectionNumber || doc.ref],
-            ['ESS representative', doc.raw?.essRepresentativeName || doc.uploadedBy || '-'],
-            ['Inspection date', formatDateTime(doc.raw?.inspectionDateTime || doc.uploadedAt)],
-            ['Client project no.', doc.raw?.projectNumberClient || '-'],
-            ...baseDetails
-        ];
-    }
-
-    if (tab.key === 'pre-starts') {
-        return [
-            ['Subject', doc.raw?.subject || doc.name],
-            ['Pre-start no.', doc.raw?.preStartNumber || doc.ref],
-            ['Representative', doc.raw?.representativeName || doc.uploadedBy || '-'],
-            ['Form date', doc.raw?.date || '-'],
-            ['Area foreman', doc.raw?.areaForeman || '-'],
-            ['Client project', doc.raw?.clientProjectName || '-'],
-            ...baseDetails
-        ];
-    }
-
-    if (tab.key === 'day-labour-variations') {
-        return [
-            ['Form reference', doc.raw?.formReferenceName || doc.name],
-            ['Variation no.', doc.raw?.variationNumber || doc.ref],
-            ['Requested by', doc.raw?.requestedBy || '-'],
-            ['Form date', formatDate(doc.raw?.date || doc.uploadedAt)],
-            ['Linked handover', doc.raw?.handoverDocumentNumber || doc.raw?.handoverDocumentTitle || '-'],
-            ['Client project', doc.raw?.clientProjectName || '-'],
-            ...baseDetails
-        ];
-    }
-
-    return [
-        ['Document name', doc.name],
-        [tab.refLabel, doc.ref],
-        ['File size', doc.size || '-'],
-        ...baseDetails
-    ];
-}
-
-function ProjectDataPreview({ doc, tab, builder, project, previewUrl, previewLoading, previewError, onClose, onOpen }) {
-    const previewSrc = previewUrl ? `${previewUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH` : '';
-    const details = getPreviewDetails(doc, tab, builder, project);
-
-    return (
-        <aside className="project-data-preview-panel" aria-label="Document preview">
-            <div className="project-data-preview-titlebar">
-                <strong title={doc.name}>{doc.name}</strong>
-                <div className="project-data-preview-actions">
-                    <button type="button" onClick={onOpen} aria-label="Open document" title="Open document">
-                        <ExternalLink size={17} />
-                    </button>
-                    <button type="button" onClick={onClose} aria-label="Close preview" title="Close preview">
-                        <X size={18} />
-                    </button>
-                </div>
-            </div>
-            <div className="project-data-preview-content">
-                <div className={`project-data-paper${previewSrc ? ' is-clickable' : ''}`}>
-                    {previewLoading ? (
-                        <div className="project-data-preview-state">
-                            <LoadingBrandmark label="Loading preview" />
-                        </div>
-                    ) : previewSrc ? (
-                        <>
-                            <iframe
-                                src={previewSrc}
-                                title={`${doc.name} preview`}
-                                className="project-data-preview-frame"
-                                scrolling="no"
-                            />
-                            <button
-                                type="button"
-                                className="project-data-preview-open-hitarea"
-                                onClick={onOpen}
-                                aria-label={`Open ${doc.name} in a new tab`}
-                                title="Open PDF in a new tab"
-                            >
-                                <span><ExternalLink size={15} /> Open PDF</span>
-                            </button>
-                        </>
-                    ) : (
-                        <div className="project-data-preview-state">
-                            <FileText size={36} />
-                            <strong>Preview unavailable</strong>
-                            <span>{previewError || 'This document can still be opened in a new tab.'}</span>
-                            <button type="button" onClick={onOpen}>Open document</button>
-                        </div>
-                    )}
-                </div>
-                <section className="project-data-preview-details" aria-label="General details">
-                    <h3>General details</h3>
-                    <dl>
-                        {details.map(([label, value]) => (
-                            <div key={label} className={label === 'Document name' ? 'document-name' : ''}>
-                                <dt>{label}</dt>
-                                <dd>{value || '-'}</dd>
-                            </div>
-                        ))}
-                    </dl>
-                </section>
-            </div>
-        </aside>
-    );
+function Modal({ title, children, onClose }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const previous = document.activeElement;
+    ref.current.showModal();
+    return () => previous?.focus?.();
+  }, []);
+  return createPortal(
+    <dialog
+      ref={ref}
+      className="pf-modal"
+      aria-label={title}
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <header>
+        <h2>{title}</h2>
+        <button aria-label="Close dialog" onClick={onClose}>
+          <X size={18} />
+        </button>
+      </header>
+      {children}
+    </dialog>,
+    document.body,
+  );
 }
 
 export default function ESSSafetyPage() {
-    const [loading, setLoading] = useState(true);
-    const [builders, setBuilders] = useState([]);
-    const [selectedBuilderId, setSelectedBuilderId] = useState(ALL_SCOPE);
-    const [selectedProjectId, setSelectedProjectId] = useState(ALL_SCOPE);
-    const [builderLogoUrls, setBuilderLogoUrls] = useState({});
-    const [builderDropdownOpen, setBuilderDropdownOpen] = useState(false);
-    const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
-    const [kindDropdownOpen, setKindDropdownOpen] = useState(false);
-    const [activeTabKey, setActiveTabKey] = useState('scaff-tags');
-    const sharingReplacesStatus = ['pre-starts', 'day-labour-variations'].includes(activeTabKey);
-    const hasSeparateSharing = ['handover-certificates', 'scaff-tags'].includes(activeTabKey);
-    const sharingBeforeStatus = activeTabKey === 'handover-certificates';
-    const [columnFilterMenu, setColumnFilterMenu] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all');
-    const [uploadedByFilter, setUploadedByFilter] = useState('all');
-    const [documentsLoading, setDocumentsLoading] = useState(false);
-    const [documents, setDocuments] = useState([]);
-    const [selectedDocumentId, setSelectedDocumentId] = useState('');
-    const [previewOpen, setPreviewOpen] = useState(false);
-    const [previewPdfUrl, setPreviewPdfUrl] = useState('');
-    const [previewLoading, setPreviewLoading] = useState(false);
-    const [previewError, setPreviewError] = useState('');
-    const [contextMenu, setContextMenu] = useState(null);
-    const [pendingDeleteDocument, setPendingDeleteDocument] = useState(null);
-    const [deletingDocumentId, setDeletingDocumentId] = useState('');
-    const [error, setError] = useState('');
-    const builderDropdownRef = useRef(null);
-    const projectDropdownRef = useRef(null);
-    const kindDropdownRef = useRef(null);
-    const documentsRequest = useRef(0);
-
-    useEffect(() => {
-        let active = true;
-        safetyProjectsAPI.getBuilders()
-            .then(nextBuilders => {
-                if (!active) return;
-                setBuilders(nextBuilders);
-            })
-            .catch(err => {
-                if (active) {
-                    setError(err.message || 'Failed to load project data');
-                }
-            })
-            .finally(() => {
-                if (active) {
-                    setLoading(false);
-                }
-            });
-        return () => {
-            active = false;
-        };
-    }, []);
-
-    useEffect(() => {
-        let active = true;
-        const logoBuilders = builders.filter(builder => builder.logoPath || builder.logoUrl || builder.logo_url);
-
-        if (logoBuilders.length === 0) {
-            setBuilderLogoUrls({});
-            return () => {
-                active = false;
-            };
+  const [builders, setBuilders] = useState([]),
+    [loading, setLoading] = useState(true),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  const [builderId, setBuilderId] = useState(ALL_SCOPE),
+    [projectId, setProjectId] = useState(ALL_SCOPE),
+    [kind, setKind] = useState("scaff-tags");
+  const [documents, setDocuments] = useState([]),
+    [reload, setReload] = useState(0);
+  const [query, setQuery] = useState(""),
+    [status, setStatus] = useState("all"),
+    [sharing, setSharing] = useState("all"),
+    [uploader, setUploader] = useState("all"),
+    [newest, setNewest] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(false),
+    [page, setPage] = useState(1),
+    [checked, setChecked] = useState([]),
+    [menu, setMenu] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null),
+    [deleting, setDeleting] = useState(false),
+    [downloading, setDownloading] = useState(false);
+  const [createKind, setCreateKind] = useState(null),
+    [createBuilder, setCreateBuilder] = useState(""),
+    [createProject, setCreateProject] = useState(""),
+    [editor, setEditor] = useState(null);
+  const rootRef = useRef(null),
+    tableRef = useRef(null),
+    filterRef = useRef(null),
+    menuRef = useRef(null),
+    menuTrigger = useRef(null);
+  const [height, setHeight] = useState(700),
+    [tableHeight, setTableHeight] = useState(350);
+  useEffect(() => {
+    let active = true;
+    safetyProjectsAPI
+      .getBuilders()
+      .then((value) => {
+        if (active) setBuilders(value);
+      })
+      .catch((e) => {
+        if (active) setError(e.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  const projects = useMemo(
+    () => projectScopeOptions(builders, builderId),
+    [builders, builderId],
+  );
+  const selectedProject = projects.find((item) => item.id === projectId);
+  const scopeProjects = useMemo(
+    () =>
+      builders.flatMap((builder) =>
+        (builder.projects || [])
+          .filter((project) =>
+            matchesProjectScope(
+              { builderId: builder.id, projectId: project.id },
+              builderId,
+              selectedProject,
+            ),
+          )
+          .map((project) => ({ builder, project })),
+      ),
+    [builders, builderId, selectedProject],
+  );
+  useEffect(() => {
+    let active = true;
+    setBusy(true);
+    setError("");
+    setDocuments([]);
+    const attach = (doc, context) => ({
+      ...doc,
+      recordId: doc.id,
+      id: JSON.stringify([
+        context.builder.id,
+        context.project.id,
+        doc.kind,
+        doc.id,
+      ]),
+      builderId: context.builder.id,
+      projectId: context.project.id,
+      ...context,
+    });
+    const contexts = new Map(
+      scopeProjects.map((context) => [
+        JSON.stringify([context.builder.id, context.project.id]),
+        context,
+      ]),
+    );
+    Promise.allSettled(
+      TYPES.map(async (type) => {
+        if (!scopeProjects.length) return [];
+        if (scopeProjects.length === 1) {
+          const context = scopeProjects[0];
+          return type
+            .map(
+              await type.api.listForms(context.builder.id, context.project.id),
+            )
+            .map((doc) => attach(doc, context));
         }
-
-        Promise.all(
-            logoBuilders.map(builder => (
-                safetyProjectsAPI.resolveBuilderLogoUrl(builder)
-                    .then(url => [builder.id, url])
-                    .catch(() => [builder.id, builder.logoUrl || builder.logo_url || ''])
-            ))
-        ).then(entries => {
-            if (!active) return;
-            setBuilderLogoUrls(Object.fromEntries(entries.filter(([, url]) => Boolean(url))));
+        return type.map(await type.api.listAllForms()).flatMap((doc) => {
+          const context = contexts.get(
+            JSON.stringify([doc.raw.builderId, doc.raw.projectId]),
+          );
+          return context ? [attach(doc, context)] : [];
         });
-
-        return () => {
-            active = false;
-        };
-    }, [builders]);
-
-    useEffect(() => {
-        if (!builderDropdownOpen && !projectDropdownOpen && !kindDropdownOpen && !columnFilterMenu && !contextMenu) return undefined;
-
-        const handlePointerDown = (event) => {
-            if (event.target.closest?.('.project-data-context-menu') || event.target.closest?.('.project-data-row-actions')) {
-                return;
-            }
-            if (!builderDropdownRef.current?.contains(event.target)) {
-                setBuilderDropdownOpen(false);
-            }
-            if (!projectDropdownRef.current?.contains(event.target)) {
-                setProjectDropdownOpen(false);
-            }
-            if (!kindDropdownRef.current?.contains(event.target)) {
-                setKindDropdownOpen(false);
-            }
-            if (!event.target.closest?.('.project-data-column-filter')) {
-                setColumnFilterMenu('');
-            }
-            setContextMenu(null);
-        };
-        const handleKeyDown = (event) => {
-            if (event.key === 'Escape') {
-                setBuilderDropdownOpen(false);
-                setProjectDropdownOpen(false);
-                setKindDropdownOpen(false);
-                setColumnFilterMenu('');
-                setContextMenu(null);
-            }
-        };
-
-        document.addEventListener('pointerdown', handlePointerDown);
-        document.addEventListener('keydown', handleKeyDown);
-        return () => {
-            document.removeEventListener('pointerdown', handlePointerDown);
-            document.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [builderDropdownOpen, projectDropdownOpen, kindDropdownOpen, columnFilterMenu, contextMenu]);
-
-    const builderOptions = useMemo(() => [ALL_BUILDERS, ...builders], [builders]);
-    const selectedBuilder = useMemo(
-        () => builderOptions.find(builder => builder.id === selectedBuilderId) || null,
-        [builderOptions, selectedBuilderId]
+      }),
+    ).then((results) => {
+      if (!active) return;
+      setDocuments(
+        results.flatMap((result) =>
+          result.status === "fulfilled" ? result.value : [],
+        ),
+      );
+      const failed = results.flatMap((result, index) =>
+        result.status === "rejected" ? [TYPES[index].label] : [],
+      );
+      if (failed.length)
+        setError(
+          `Could not load ${failed.join(", ")}. Please refresh to retry.`,
+        );
+      setBusy(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [scopeProjects, reload]);
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible")
+        setReload((value) => value + 1);
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
+  useEffect(() => {
+    setPage(1);
+    setChecked([]);
+    setMenu(null);
+  }, [builderId, projectId, kind, query, status, sharing, uploader]);
+  useEffect(() => {
+    const resize = () => {
+      if (rootRef.current)
+        setHeight(
+          Math.max(
+            320,
+            window.innerHeight - rootRef.current.getBoundingClientRect().top,
+          ),
+        );
+    };
+    resize();
+    window.addEventListener("resize", resize);
+    const observer = new ResizeObserver(() => {
+      resize();
+      if (tableRef.current) setTableHeight(tableRef.current.clientHeight);
+    });
+    if (rootRef.current) observer.observe(rootRef.current);
+    if (tableRef.current) observer.observe(tableRef.current);
+    return () => {
+      window.removeEventListener("resize", resize);
+      observer.disconnect();
+    };
+  }, [loading]);
+  useEffect(() => {
+    const dismiss = (e) => {
+      if (!filterRef.current?.contains(e.target)) setFiltersOpen(false);
+      if (
+        !menuRef.current?.contains(e.target) &&
+        !e.target.closest(".pf-row-actions")
+      )
+        setMenu(null);
+    };
+    const escape = (e) => {
+      if (e.key === "Escape") {
+        setFiltersOpen(false);
+        setMenu(null);
+        menuTrigger.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, []);
+  useEffect(() => {
+    if (menu) menuRef.current?.querySelector("button")?.focus();
+  }, [menu]);
+  const hasStatus = ["scaff-tags", "handover-certificates"].includes(kind);
+  const currentDocuments = documents.filter((doc) => doc.kind === kind);
+  const filtered = currentDocuments
+    .filter(
+      (doc) =>
+        (!query ||
+          `${doc.name} ${doc.ref} ${doc.builder.name} ${doc.project.name}`
+            .toLowerCase()
+            .includes(query.toLowerCase())) &&
+        (status === "all" || doc.status === status) &&
+        (sharing === "all" || String(isFormShared(doc.raw)) === sharing) &&
+        (uploader === "all" || doc.uploadedBy === uploader),
+    )
+    .sort(
+      (a, b) => (time(b.uploadedAt) - time(a.uploadedAt)) * (newest ? 1 : -1),
     );
-    const projectOptions = useMemo(() => projectScopeOptions(builders, selectedBuilderId), [builders, selectedBuilderId]);
-    const selectedProject = useMemo(
-        () => projectOptions.find(project => project.id === selectedProjectId) || null,
-        [projectOptions, selectedProjectId]
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)),
+    currentPage = Math.min(page, totalPages),
+    pageRows = filtered.slice(
+      (currentPage - 1) * PAGE_SIZE,
+      currentPage * PAGE_SIZE,
     );
-    const scopeProjects = useMemo(() => builders.flatMap(builder => (builder.projects || [])
-        .filter(project => matchesProjectScope({builderId: builder.id, projectId: project.id}, selectedBuilderId, selectedProject))
-        .map(project => ({builder, project}))), [builders, selectedBuilderId, selectedProject]);
-
-    const activeTab = useMemo(
-        () => PROJECT_DATA_TABS.find(tab => tab.key === activeTabKey) || PROJECT_DATA_TABS[0],
-        [activeTabKey]
+  const selectedRows = filtered.filter((doc) => checked.includes(doc.id)),
+    allChecked =
+      pageRows.length > 0 && pageRows.every((doc) => checked.includes(doc.id));
+  const recent = [...documents]
+    .sort(
+      (a, b) =>
+        time(b.raw.updatedAt || b.uploadedAt) -
+        time(a.raw.updatedAt || a.uploadedAt),
+    )
+    .slice(0, 3);
+  const filteredOn =
+    query || status !== "all" || sharing !== "all" || uploader !== "all";
+  const clearFilters = () => {
+    setQuery("");
+    setStatus("all");
+    setSharing("all");
+    setUploader("all");
+  };
+  const changeKind = (next) => {
+    setKind(next);
+    clearFilters();
+  };
+  const toggle = (id) =>
+    setChecked((ids) =>
+      ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id],
     );
-
-    const handleSelectBuilder = (builderId) => {
-        const selection = resolveProjectScope(builders, {
-            builderId,
-            projectId: builderId === ALL_SCOPE || selectedProject?.isAll ? ALL_SCOPE : undefined,
-        });
-        setSelectedBuilderId(selection.builderId);
-        setSelectedProjectId(selection.projectId);
-        setBuilderDropdownOpen(false);
-        setProjectDropdownOpen(false);
-        setKindDropdownOpen(false);
-        setPreviewOpen(false);
-        setSelectedDocumentId('');
-    };
-
-    const handleSelectProject = (projectId) => {
-        setSelectedProjectId(projectId);
-        setProjectDropdownOpen(false);
-        closeDocumentPreview();
-    };
-
-    const handleSelectKind = (tabKey) => {
-        setActiveTabKey(tabKey);
-        setKindDropdownOpen(false);
-        setStatusFilter('all');
-        setUploadedByFilter('all');
-        setColumnFilterMenu('');
-        closeDocumentPreview();
-    };
-
-    const loadDocuments = useCallback(async ({ silent = false, preserveSelection = false } = {}) => {
-        const request = ++documentsRequest.current;
-        if (!scopeProjects.length) {
-            setDocumentsLoading(false);
-            setDocuments([]);
-            setSelectedDocumentId('');
-            return;
-        }
-
-        if (!silent) {
-            setDocumentsLoading(true);
-            setError('');
-        }
-        try {
-            const attachContext = (doc, builder, project) => ({
-                ...doc,
-                recordId: doc.id,
-                id: JSON.stringify([builder.id, project.id, doc.kind, doc.id]),
-                builderId: builder.id,
-                projectId: project.id,
-                builder,
-                project,
-            });
-            const formSources = {
-                'scaff-tags': [scaffTagsAPI, mapScaffTagRows],
-                'handover-certificates': [handoverCertificatesAPI, mapHandoverRows],
-                'pre-starts': [preStartsAPI, mapPreStartRows],
-                'day-labour-variations': [dayLabourVariationsAPI, mapDayLabourVariationRows],
-            };
-            let rows = [];
-            if (formSources[activeTab.key]) {
-                const [api, mapRows] = formSources[activeTab.key];
-                if (scopeProjects.length === 1) {
-                    const {builder, project} = scopeProjects[0];
-                    rows = mapRows(await api.listForms(builder.id, project.id)).map(doc => attachContext(doc, builder, project));
-                } else {
-                    const contexts = new Map(scopeProjects.map(context => [JSON.stringify([context.builder.id, context.project.id]), context]));
-                    rows = mapRows(await api.listAllForms()).flatMap(doc => {
-                        const context = contexts.get(JSON.stringify([doc.raw.builderId, doc.raw.projectId]));
-                        return context ? [attachContext(doc, context.builder, context.project)] : [];
-                    });
-                }
-            } else {
-                // File-based document types are stored by project; bound concurrent reads.
-                for (let offset = 0; offset < scopeProjects.length; offset += 6) {
-                    const groups = await Promise.all(scopeProjects.slice(offset, offset + 6).map(async ({builder, project}) =>
-                        mapFileRows(await safetyFilesAPI.listModuleFiles(builder.id, project.id, activeTab.storageKind), activeTab)
-                            .map(doc => attachContext(doc, builder, project))));
-                    if (request !== documentsRequest.current) return;
-                    rows.push(...groups.flat());
-                }
-            }
-            if (request !== documentsRequest.current) return;
-            rows.sort((left, right) => String(right.uploadedAt).localeCompare(String(left.uploadedAt)));
-            setDocuments(rows);
-            if (!preserveSelection) {
-                setSelectedDocumentId('');
-                setPreviewOpen(false);
-            }
-        } catch (err) {
-            if (request !== documentsRequest.current) return;
-            if (!silent) {
-                setDocuments([]);
-                setSelectedDocumentId('');
-                setPreviewOpen(false);
-                setError(err.message || `Failed to load ${activeTab.noun}`);
-            }
-        } finally {
-            if (request === documentsRequest.current) {
-                setDocumentsLoading(false);
-            }
-        }
-    }, [activeTab, scopeProjects]);
-
-    useEffect(() => {
-        loadDocuments().catch(() => {});
-        return () => { documentsRequest.current += 1; };
-    }, [loadDocuments]);
-
-    useEffect(() => {
-        const refreshVisibleDocuments = () => {
-            if (document.visibilityState === 'visible') {
-                loadDocuments({ silent: true, preserveSelection: true }).catch(() => {});
-            }
-        };
-        window.addEventListener('focus', refreshVisibleDocuments);
-        document.addEventListener('visibilitychange', refreshVisibleDocuments);
-        return () => {
-            window.removeEventListener('focus', refreshVisibleDocuments);
-            document.removeEventListener('visibilitychange', refreshVisibleDocuments);
-        };
-    }, [loadDocuments]);
-
-    const selectedDocument = useMemo(
-        () => documents.find(document => document.id === selectedDocumentId) || null,
-        [documents, selectedDocumentId]
-    );
-
-    const filteredDocuments = useMemo(() => {
-        return documents.filter(document => (
-            (statusFilter === 'all' || document.status === statusFilter)
-            && (uploadedByFilter === 'all' || document.uploadedBy === uploadedByFilter)
-        ));
-    }, [documents, statusFilter, uploadedByFilter]);
-
-    const statusOptions = useMemo(
-        () => ['day-labour-variations', 'pre-starts'].includes(activeTab.key) ? ['Form Shared', 'Not Shared'] : activeTab.key === 'handover-certificates' ? ['Active', 'Dismantled'] : [...new Set(documents.map(document => document.status).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-        [documents, activeTab.key]
-    );
-
-    const uploadedByOptions = useMemo(
-        () => [...new Set(documents.map(document => document.uploadedBy).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-        [documents]
-    );
-
-    const contextMenuDocument = useMemo(
-        () => documents.find(document => document.id === contextMenu?.documentId) || null,
-        [documents, contextMenu]
-    );
-
-    const toggleColumnFilterMenu = (key) => {
-        setColumnFilterMenu(current => current === key ? '' : key);
-    };
-
-    const openDocumentPreview = (documentId) => {
-        setSelectedDocumentId(documentId);
-        setPreviewOpen(true);
-        setContextMenu(null);
-    };
-
-    const closeDocumentPreview = () => {
-        setPreviewOpen(false);
-        setSelectedDocumentId('');
-        setPreviewPdfUrl('');
-        setPreviewError('');
-    };
-
-    const resolveDocumentPdfUrl = async (doc) => {
-        if (!doc) return '';
-        if (doc.kind === 'scaff-tags') {
-            const form = await scaffTagsAPI.getForm(doc.builderId, doc.projectId, doc.recordId);
-            if (!form) throw new Error('Scaff-tag form not found');
-            return scaffTagsAPI.getPdfUrl(form);
-        }
-        if (doc.kind === 'handover-certificates') {
-            const form = await handoverCertificatesAPI.getForm(doc.builderId, doc.projectId, doc.recordId);
-            if (!form) throw new Error('Handover certificate not found');
-            return handoverCertificatesAPI.getPdfUrl(form);
-        }
-        if (doc.kind === 'pre-starts') {
-            const form = await preStartsAPI.getForm(doc.builderId, doc.projectId, doc.recordId);
-            if (!form) throw new Error('Pre-start form not found');
-            return preStartsAPI.getPdfUrl(form);
-        }
-        if (doc.kind === 'day-labour-variations') {
-            const form = await dayLabourVariationsAPI.getForm(doc.builderId, doc.projectId, doc.recordId);
-            if (form) {
-                return dayLabourVariationsAPI.getPdfUrl(form);
-            }
-            if (doc.raw?.pdfPath) {
-                return dayLabourVariationsAPI.getPdfUrl({ pdfPath: doc.raw.pdfPath });
-            }
-            throw new Error('Day labour/variation PDF not found');
-        }
-        return safetyFilesAPI.getSignedModuleFileUrl(doc.raw.path);
-    };
-
-    useEffect(() => {
-        let active = true;
-
-        if (!previewOpen || !selectedDocument) {
-            setPreviewPdfUrl('');
-            setPreviewError('');
-            setPreviewLoading(false);
-            return () => {
-                active = false;
-            };
-        }
-
-        setPreviewPdfUrl('');
-        setPreviewError('');
-        setPreviewLoading(true);
-        resolveDocumentPdfUrl(selectedDocument)
-            .then(url => {
-                if (active) {
-                    setPreviewPdfUrl(url);
-                }
-            })
-            .catch(err => {
-                if (active) {
-                    setPreviewError(err.message || 'Failed to load preview');
-                }
-            })
-            .finally(() => {
-                if (active) {
-                    setPreviewLoading(false);
-                }
-            });
-
-        return () => {
-            active = false;
-        };
-    }, [previewOpen, selectedDocument?.id, selectedDocument?.kind, selectedBuilder?.id, selectedProject?.id]);
-
-    const openSelectedDocument = async (doc = selectedDocument) => {
-        if (!doc) return;
-        try {
-            const url = await resolveDocumentPdfUrl(doc);
-            if (url) {
-                window.open(url, '_blank', 'noopener,noreferrer');
-            }
-        } catch (err) {
-            setError(err.message || 'Failed to open document');
-        }
-    };
-
-    const downloadDocumentPdf = async (doc) => {
-        if (!doc) return;
-        try {
-            const url = await resolveDocumentPdfUrl(doc);
-            if (!url) return;
-
-            const response = await fetch(url);
-            if (!response.ok) throw new Error('Failed to download document');
-
-            const blob = await response.blob();
-            const objectUrl = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = objectUrl;
-            link.download = doc.name || 'document.pdf';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(objectUrl);
-        } catch (err) {
-            setError(err.message || 'Failed to download document');
-        }
-    };
-
-    const handlePdfIconKeyDown = (event, document) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        event.stopPropagation();
-        downloadDocumentPdf(document);
-    };
-
-    const openRowMenu = (event, document) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const rect = event.currentTarget?.getBoundingClientRect?.();
-        const fallbackX = rect ? rect.right - 190 : window.innerWidth - 220;
-        const fallbackY = rect ? rect.bottom + 6 : window.innerHeight / 2;
-        const clientX = Number.isFinite(event.clientX) && event.clientX > 0 ? event.clientX : fallbackX;
-        const clientY = Number.isFinite(event.clientY) && event.clientY > 0 ? event.clientY : fallbackY;
-        setSelectedDocumentId(document.id);
-        setContextMenu({
-            documentId: document.id,
-            x: Math.max(8, Math.min(clientX, window.innerWidth - 220)),
-            y: Math.max(8, Math.min(clientY, window.innerHeight - 96))
-        });
-    };
-
-    const deleteProjectDataDocument = async (doc = contextMenuDocument) => {
-        if (!doc || deletingDocumentId) return;
-
-        setDeletingDocumentId(doc.id);
-        setError('');
-        setDocuments(current => current.filter(document => document.id !== doc.id));
-        if (selectedDocumentId === doc.id) {
-            closeDocumentPreview();
-        }
-        setContextMenu(null);
-        setPendingDeleteDocument(null);
-        try {
-            if (doc.kind === 'scaff-tags') {
-                await scaffTagsAPI.deleteForm(doc.builderId, doc.projectId, doc.recordId);
-            } else if (doc.kind === 'handover-certificates') {
-                await handoverCertificatesAPI.deleteForm(doc.builderId, doc.projectId, doc.recordId);
-            } else if (doc.kind === 'pre-starts') {
-                await preStartsAPI.deleteForm(doc.builderId, doc.projectId, doc.recordId);
-            } else if (doc.kind === 'day-labour-variations') {
-                await dayLabourVariationsAPI.deleteForm(doc.builderId, doc.projectId, doc.recordId);
-            } else {
-                await safetyFilesAPI.deleteModuleFile(doc.raw.path);
-            }
-
-        } catch (err) {
-            setError(err.message || 'Failed to delete document');
-            await loadDocuments({ silent: true, preserveSelection: true }).catch(() => {});
-        } finally {
-            setDeletingDocumentId('');
-        }
-    };
-
-    const statusHeader = (
-        <TableHeaderFilter
-            label={sharingReplacesStatus ? "Form Shared" : "Status"}
-            active={statusFilter !== 'all'}
-            open={columnFilterMenu === 'status'}
-            onToggle={() => toggleColumnFilterMenu('status')}
-        >
-            <button type="button" className={statusFilter === 'all' ? 'selected' : ''} onClick={() => {
-                setStatusFilter('all');
-                setColumnFilterMenu('');
-            }}>All statuses</button>
-            {statusOptions.map(status => (
-                <button type="button" key={status} className={statusFilter === status ? 'selected' : ''} onClick={() => {
-                    setStatusFilter(status);
-                    setColumnFilterMenu('');
-                }}>{status}</button>
-            ))}
-        </TableHeaderFilter>
-    );
-
-    if (loading) {
-        return <div className="module-page"><div className="page-loading-brandmark"><LoadingBrandmark label="Loading project data" /></div></div>;
+  const resolvePdf = useCallback(async (doc) => {
+    const api = TYPES.find((type) => type.key === doc.kind).api;
+    const form = await api.getForm(doc.builderId, doc.projectId, doc.recordId);
+    if (!form) throw new Error("This form is no longer available.");
+    const url = await api.getPdfUrl(form);
+    if (!url)
+      throw new Error(
+        "The PDF is not available yet. Open the form and generate its PDF first.",
+      );
+    return url;
+  }, []);
+  const openPdf = async (doc) => {
+    setMenu(null);
+    const popup = window.open("about:blank", "_blank");
+    if (popup) {
+      popup.opener = null;
+      popup.document.title = "Loading PDF…";
     }
-
+    try {
+      const url = await resolvePdf(doc);
+      if (popup) popup.location.replace(url);
+      else window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      popup?.close();
+      setError(e.message);
+    }
+  };
+  const download = async (rows) => {
+    if (downloading || !rows.length) return;
+    setDownloading(true);
+    setMenu(null);
+    setError("");
+    try {
+      const files = [];
+      for (const doc of rows) {
+        const response = await fetch(await resolvePdf(doc));
+        if (!response.ok) throw new Error(`Could not download ${doc.name}.`);
+        files.push({
+          doc,
+          bytes: new Uint8Array(await response.arrayBuffer()),
+        });
+      }
+      const blob =
+        files.length === 1
+          ? new Blob([files[0].bytes], { type: "application/pdf" })
+          : new Blob(
+              [
+                zipSync(
+                  Object.fromEntries(
+                    files.map(({ doc, bytes }, i) => [
+                      `${i + 1}-${fileName(doc)}`,
+                      bytes,
+                    ]),
+                  ),
+                ),
+              ],
+              { type: "application/zip" },
+            );
+      const url = URL.createObjectURL(blob),
+        link = document.createElement("a");
+      link.href = url;
+      link.download =
+        files.length === 1 ? fileName(files[0].doc) : "project-documents.zip";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
+  const openMenu = (doc, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    menuTrigger.current = e.currentTarget;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenu({
+      doc,
+      x: Math.max(
+        8,
+        Math.min(e.clientX || rect.right, window.innerWidth - 230),
+      ),
+      y: Math.max(
+        8,
+        Math.min(e.clientY || rect.bottom, window.innerHeight - 250),
+      ),
+    });
+  };
+  const deleteDocument = async () => {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    try {
+      const doc = pendingDelete;
+      await TYPES.find((type) => type.key === doc.kind).api.deleteForm(
+        doc.builderId,
+        doc.projectId,
+        doc.recordId,
+      );
+      setDocuments((rows) => rows.filter((row) => row.id !== doc.id));
+      setChecked((ids) => ids.filter((id) => id !== doc.id));
+      setPendingDelete(null);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+  const launchEditor = (type, builder, project) => {
+    setCreateKind(null);
+    setEditor({
+      screen: type === "pre-starts" ? "PreStartForm" : "DayLabourVariationForm",
+      params: {
+        builderId: builder.id,
+        builderName: builder.name,
+        projectId: project.id,
+        projectName: project.name,
+        initialCompanyEntityId: normalizeCompanyEntityId(
+          project.scaffoldEntity,
+        ),
+      },
+    });
+    changeKind(type);
+  };
+  const newDocument = (type) => {
+    const context = scopeProjects.length === 1 ? scopeProjects[0] : null;
+    if (context) {
+      launchEditor(type, context.builder, context.project);
+      return;
+    }
+    setCreateKind(type);
+    setCreateBuilder(builderId === ALL_SCOPE ? "" : builderId);
+    setCreateProject("");
+  };
+  const closeEditor = () => {
+    setEditor(null);
+    setReload((value) => value + 1);
+  };
+  const pageNumbers = [
+    ...new Set([
+      1,
+      ...Array.from({ length: 5 }, (_, i) => currentPage - 2 + i).filter(
+        (value) => value > 1 && value < totalPages,
+      ),
+      totalPages,
+    ]),
+  ].sort((a, b) => a - b);
+  if (loading)
     return (
-        <div className="module-page project-data-page">
-            <div className="project-data-shell">
-                <section className="project-data-selector-row" aria-label="Project selector">
-                    <label className="project-data-select-field">
-                        <span>Builder</span>
-                        <BuilderDropdown
-                            builders={builderOptions}
-                            selectedBuilder={selectedBuilder}
-                            logoUrls={builderLogoUrls}
-                            open={builderDropdownOpen}
-                            onOpenChange={setBuilderDropdownOpen}
-                            onToggle={() => {
-                                setBuilderDropdownOpen(prev => !prev);
-                                setProjectDropdownOpen(false);
-                                setKindDropdownOpen(false);
-                            }}
-                            onSelect={handleSelectBuilder}
-                            dropdownRef={builderDropdownRef}
-                        />
-                    </label>
-                    <label className="project-data-select-field">
-                        <span>Project</span>
-                        <ProjectDropdown
-                            projects={projectOptions}
-                            selectedProject={selectedProject}
-                            open={projectDropdownOpen}
-                            onOpenChange={setProjectDropdownOpen}
-                            onToggle={() => {
-                                if (!selectedBuilder) return;
-                                setProjectDropdownOpen(prev => !prev);
-                                setBuilderDropdownOpen(false);
-                                setKindDropdownOpen(false);
-                            }}
-                            onSelect={handleSelectProject}
-                            disabled={!selectedBuilder}
-                            dropdownRef={projectDropdownRef}
-                        />
-                    </label>
-                    <label className="project-data-select-field">
-                        <span>Document type</span>
-                        <DataTypeDropdown
-                            tabs={PROJECT_DATA_TABS}
-                            activeTab={activeTab}
-                            open={kindDropdownOpen}
-                            onToggle={() => {
-                                setKindDropdownOpen(prev => !prev);
-                                setBuilderDropdownOpen(false);
-                                setProjectDropdownOpen(false);
-                            }}
-                            onSelect={handleSelectKind}
-                            dropdownRef={kindDropdownRef}
-                        />
-                    </label>
-                </section>
-
-                {error ? <div className="module-error project-data-error">{error}</div> : null}
-
-                <section className="project-data-workspace">
-                    <div className="project-data-main-panel">
-                        <div className={`project-data-table-card${hasSeparateSharing ? ' has-form-sharing' : sharingReplacesStatus ? ' sharing-only' : ''}${sharingBeforeStatus ? ' handover-actions-last' : ''}`}>
-                            <div className="project-data-table-head">
-                                <span className="project-data-checkbox" aria-hidden="true" />
-                                <span>Document name</span>
-                                <span>{activeTab.refLabel}</span>
-                                {sharingBeforeStatus ? <span className="project-data-sharing-cell">Form Shared</span> : !sharingReplacesStatus && <span>{statusHeader}</span>}
-                                <span>Uploaded</span>
-                                <span>
-                                    <TableHeaderFilter
-                                        label="Uploaded by"
-                                        active={uploadedByFilter !== 'all'}
-                                        open={columnFilterMenu === 'uploadedBy'}
-                                        onToggle={() => toggleColumnFilterMenu('uploadedBy')}
-                                    >
-                                        <button type="button" className={uploadedByFilter === 'all' ? 'selected' : ''} onClick={() => {
-                                            setUploadedByFilter('all');
-                                            setColumnFilterMenu('');
-                                        }}>All uploaders</button>
-                                        {uploadedByOptions.map(uploadedBy => (
-                                            <button type="button" key={uploadedBy} className={uploadedByFilter === uploadedBy ? 'selected' : ''} onClick={() => {
-                                                setUploadedByFilter(uploadedBy);
-                                                setColumnFilterMenu('');
-                                            }}>{uploadedBy}</button>
-                                        ))}
-                                    </TableHeaderFilter>
-                                </span>
-                                {sharingBeforeStatus && <span>{statusHeader}</span>}
-                                <span />
-                                {hasSeparateSharing && !sharingBeforeStatus && <span className="project-data-sharing-cell">Form Shared</span>}
-                                {sharingReplacesStatus && <span className="project-data-sharing-cell">{statusHeader}</span>}
-                            </div>
-
-                            {documentsLoading ? (
-                                <div className="project-data-table-state">
-                                    <LoadingBrandmark label={`Loading ${activeTab.noun}`} />
-                                </div>
-                            ) : filteredDocuments.length === 0 ? (
-                                <div className="project-data-empty-state">
-                                    <FileCheck size={34} />
-                                    <strong>No {activeTab.noun} yet</strong>
-                                    <span>{selectedProject ? `${selectedProject.name} is ready for its first upload.` : 'Select a builder and project to begin.'}</span>
-                                </div>
-                            ) : (
-                                <div className="project-data-table-body">
-                                    {filteredDocuments.map(document => (
-                                        <button
-                                            key={document.id}
-                                            type="button"
-                                            className={`project-data-table-row${previewOpen && selectedDocument?.id === document.id ? ' selected' : ''}`}
-                                            onClick={() => openDocumentPreview(document.id)}
-                                            onDoubleClick={() => openSelectedDocument(document)}
-                                            onContextMenu={(event) => openRowMenu(event, document)}
-                                        >
-                                            <span className="project-data-checkbox" aria-hidden="true" />
-                                            <span className="project-data-doc-name">
-                                                <span
-                                                    className="project-data-pdf-icon"
-                                                    role="button"
-                                                    tabIndex={0}
-                                                    title="Download PDF"
-                                                    aria-label={`Download ${document.name}`}
-                                                    onClick={(event) => {
-                                                        event.stopPropagation();
-                                                        downloadDocumentPdf(document);
-                                                    }}
-                                                    onDoubleClick={(event) => event.stopPropagation()}
-                                                    onKeyDown={(event) => handlePdfIconKeyDown(event, document)}
-                                                >
-                                                    <FileText size={15} />
-                                                </span>
-                                                <span title={document.name}>{document.name}</span>
-                                            </span>
-                                            <span>{document.ref}</span>
-                                            {sharingBeforeStatus ? <span className="project-data-sharing-cell"><FormSharedCheckbox form={document.raw} /></span> : !sharingReplacesStatus && <span><StatusChip status={document.status} /></span>}
-                                            <span>{formatDate(document.uploadedAt)}</span>
-                                            <span>{document.uploadedBy}</span>
-                                            {sharingBeforeStatus && <span><StatusChip status={document.status} /></span>}
-                                            <span
-                                                className="project-data-row-actions"
-                                                role="button"
-                                                tabIndex={0}
-                                                aria-label={`Open actions for ${document.name}`}
-                                                title="Actions"
-                                                onClick={(event) => openRowMenu(event, document)}
-                                                onKeyDown={(event) => {
-                                                    if (event.key !== 'Enter' && event.key !== ' ') return;
-                                                    openRowMenu(event, document);
-                                                }}
-                                            >
-                                                <MoreVertical size={17} />
-                                            </span>
-                                            {(hasSeparateSharing || sharingReplacesStatus) && !sharingBeforeStatus && <span className="project-data-sharing-cell"><FormSharedCheckbox form={document.raw} /></span>}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
-                            {contextMenu && contextMenuDocument ? (
-                                <div
-                                    className="project-data-context-menu"
-                                    style={{ left: contextMenu.x, top: contextMenu.y }}
-                                    role="menu"
-                                    aria-label={`Actions for ${contextMenuDocument.name}`}
-                                >
-                                    <button
-                                        type="button"
-                                        className="danger"
-                                        disabled={deletingDocumentId === contextMenuDocument.id}
-                                        onClick={() => {
-                                            setPendingDeleteDocument(contextMenuDocument);
-                                            setContextMenu(null);
-                                        }}
-                                        role="menuitem"
-                                    >
-                                        <Trash2 size={15} />
-                                        {deletingDocumentId === contextMenuDocument.id ? 'Deleting...' : 'Delete PDF'}
-                                    </button>
-                                </div>
-                            ) : null}
-
-                        </div>
-                    </div>
-
-                    {previewOpen && selectedDocument ? (
-                        <>
-                            <button
-                                type="button"
-                                className="project-data-preview-backdrop"
-                                aria-label="Close document preview"
-                                onClick={closeDocumentPreview}
-                            />
-                            <ProjectDataPreview
-                                doc={selectedDocument}
-                                tab={activeTab}
-                                builder={selectedDocument.builder}
-                                project={selectedDocument.project}
-                                previewUrl={previewPdfUrl}
-                                previewLoading={previewLoading}
-                                previewError={previewError}
-                                onClose={closeDocumentPreview}
-                                onOpen={() => openSelectedDocument()}
-                            />
-                        </>
-                    ) : null}
-                </section>
-            </div>
-
-            {pendingDeleteDocument ? (
-                <div className="module-modal-backdrop project-data-delete-backdrop" onClick={() => {
-                    if (!deletingDocumentId) {
-                        setPendingDeleteDocument(null);
-                    }
-                }}>
-                    <div className="module-modal compact project-data-delete-modal" onClick={(event) => event.stopPropagation()}>
-                        <div className="project-data-delete-icon" aria-hidden="true">
-                            <AlertTriangle size={25} />
-                        </div>
-                        <div className="project-data-delete-copy">
-                            <h3>Delete Project Data PDF?</h3>
-                            <p>
-                                This will permanently delete <strong>{pendingDeleteDocument.name}</strong> from {pendingDeleteDocument.project?.name || 'this project'}.
-                            </p>
-                            <span>This cannot be undone.</span>
-                        </div>
-                        {error ? <div className="module-error">{error}</div> : null}
-                        <div className="module-form-actions">
-                            <button
-                                type="button"
-                                className="module-secondary-btn"
-                                disabled={Boolean(deletingDocumentId)}
-                                onClick={() => setPendingDeleteDocument(null)}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                className="module-danger-btn"
-                                disabled={Boolean(deletingDocumentId)}
-                                onClick={() => deleteProjectDataDocument(pendingDeleteDocument)}
-                            >
-                                {deletingDocumentId ? 'Deleting...' : 'Delete PDF'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
-        </div>
+      <div className="module-page">
+        <LoadingBrandmark label="Loading project data" />
+      </div>
     );
+  return (
+    <main
+      ref={rootRef}
+      className="project-files-page"
+      style={{
+        height,
+        "--pf-row": `${Math.max(12, (tableHeight - 32) / PAGE_SIZE)}px`,
+        "--pf-scale": Math.min(
+          1,
+          Math.max(0.5, (tableHeight - 32) / PAGE_SIZE / 60),
+        ),
+      }}
+    >
+      <div className="pf-create-cards">
+        {[
+          ["day-labour-variations", "New Day Labour/Variation"],
+          ["pre-starts", "New Pre-Start"],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => newDocument(key)}
+            className="pf-create-card"
+          >
+            <span>
+              <FileText size={19} />
+            </span>
+            <Plus size={16} />
+            <strong>{label}</strong>
+          </button>
+        ))}
+      </div>
+      <section className="pf-recent" aria-label="Recently modified">
+        <h2>Recently modified</h2>
+        <div>
+          {recent.map((doc) => (
+            <button
+              key={doc.id}
+              onClick={() => openPdf(doc)}
+              className="pf-recent-card"
+            >
+              <FileText size={20} />
+              <span>
+                <strong title={doc.name}>{doc.name}</strong>
+                <small>
+                  {TYPES.find((type) => type.key === doc.kind).label}
+                </small>
+                <small
+                  title={`Client: ${doc.builder.name} · Project: ${doc.project.name}`}
+                >
+                  {doc.builder.name} · {doc.project.name}
+                </small>
+              </span>
+            </button>
+          ))}
+          {!recent.length && (
+            <p>
+              {busy
+                ? "Loading recently modified forms…"
+                : "No forms in this project selection yet."}
+            </p>
+          )}
+        </div>
+      </section>
+      {error && (
+        <div className="pf-error" role="alert">
+          {error}
+          <button aria-label="Dismiss error" onClick={() => setError("")}>
+            <X size={15} />
+          </button>
+        </div>
+      )}
+      <section className="pf-panel">
+        <div className="pf-toolbar">
+          <nav className="pf-tabs" aria-label="Document type">
+            {TYPES.map((type) => (
+              <button
+                key={type.key}
+                aria-pressed={kind === type.key}
+                onClick={() => changeKind(type.key)}
+              >
+                {type.label}
+              </button>
+            ))}
+          </nav>
+          <div className="pf-scope">
+            <select
+              aria-label="Builder"
+              value={builderId}
+              onChange={(e) => {
+                const scope = resolveProjectScope(builders, {
+                  builderId: e.target.value,
+                  projectId: ALL_SCOPE,
+                });
+                setBuilderId(scope.builderId);
+                setProjectId(scope.projectId);
+              }}
+            >
+              {[ALL_BUILDERS, ...builders].map((builder) => (
+                <option key={builder.id} value={builder.id}>
+                  {builder.name}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Project"
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+            >
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <label className="pf-search">
+            <Search size={16} />
+            <input
+              aria-label="Search documents"
+              placeholder="Search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {query && (
+              <button aria-label="Clear search" onClick={() => setQuery("")}>
+                <X size={14} />
+              </button>
+            )}
+          </label>
+          <div className="pf-filter-anchor" ref={filterRef}>
+            <button
+              className="pf-filter-button"
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen(!filtersOpen)}
+            >
+              <SlidersHorizontal size={15} />
+              Filters
+              {[status, sharing, uploader].filter((value) => value !== "all")
+                .length > 0 && (
+                <b>
+                  {
+                    [status, sharing, uploader].filter(
+                      (value) => value !== "all",
+                    ).length
+                  }
+                </b>
+              )}
+            </button>
+            {filtersOpen && (
+              <div className="pf-filter-popover">
+                <strong>Filter documents</strong>
+                {hasStatus && (
+                  <label>
+                    Status
+                    <select
+                      aria-label="Status filter"
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value)}
+                    >
+                      <option value="all">All statuses</option>
+                      {[
+                        ...new Set(currentDocuments.map((doc) => doc.status)),
+                      ].map((value) => (
+                        <option key={value}>{value}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <label>
+                  Form Shared
+                  <select
+                    aria-label="Form Shared filter"
+                    value={sharing}
+                    onChange={(e) => setSharing(e.target.value)}
+                  >
+                    <option value="all">All forms</option>
+                    <option value="true">Shared</option>
+                    <option value="false">Not shared</option>
+                  </select>
+                </label>
+                <label>
+                  Uploaded by
+                  <select
+                    aria-label="Uploaded by filter"
+                    value={uploader}
+                    onChange={(e) => setUploader(e.target.value)}
+                  >
+                    <option value="all">All uploaders</option>
+                    {[...new Set(currentDocuments.map((doc) => doc.uploadedBy))]
+                      .sort()
+                      .map((value) => (
+                        <option key={value}>{value}</option>
+                      ))}
+                  </select>
+                </label>
+                <footer>
+                  <button onClick={clearFilters}>Reset filters</button>
+                  <button onClick={() => setFiltersOpen(false)}>Done</button>
+                </footer>
+              </div>
+            )}
+          </div>
+        </div>
+        {filteredOn && (
+          <div className="pf-filter-summary">
+            <span>{filtered.length} matching documents</span>
+            {query && <span>“{query}”</span>}
+            {status !== "all" && <span>{status}</span>}
+            {sharing !== "all" && (
+              <span>{sharing === "true" ? "Shared" : "Not shared"}</span>
+            )}
+            {uploader !== "all" && <span>{uploader}</span>}
+            <button onClick={clearFilters}>Clear filters</button>
+          </div>
+        )}
+        {selectedRows.length > 0 && (
+          <div className="pf-selection">
+            <strong>{selectedRows.length} selected</strong>
+            <button
+              disabled={downloading}
+              onClick={() => download(selectedRows)}
+            >
+              <Download size={14} />
+              {downloading ? "Downloading…" : "Download selected"}
+            </button>
+            <button onClick={() => setChecked([])}>Clear selection</button>
+          </div>
+        )}
+        <div className="pf-table-area" ref={tableRef} aria-busy={busy}>
+          <table className={hasStatus ? "pf-with-status" : "pf-without-status"}>
+            <thead>
+              <tr>
+                <th>
+                  <div className="pf-file">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all files on this page"
+                      checked={allChecked}
+                      ref={(element) => {
+                        if (element)
+                          element.indeterminate =
+                            !allChecked &&
+                            pageRows.some((doc) => checked.includes(doc.id));
+                      }}
+                      onChange={() =>
+                        setChecked((ids) =>
+                          allChecked
+                            ? ids.filter(
+                                (id) => !pageRows.some((doc) => doc.id === id),
+                              )
+                            : [
+                                ...new Set([
+                                  ...ids,
+                                  ...pageRows.map((doc) => doc.id),
+                                ]),
+                              ],
+                        )
+                      }
+                    />
+                    <span>Document / reference</span>
+                  </div>
+                </th>
+                <th>
+                  <button
+                    onClick={() => {
+                      setNewest(!newest);
+                      setPage(1);
+                    }}
+                  >
+                    Uploaded{" "}
+                    <ArrowDown
+                      size={12}
+                      style={{ transform: newest ? "none" : "rotate(180deg)" }}
+                    />
+                  </button>
+                </th>
+                <th>Uploaded by</th>
+                <th>Form Shared</th>
+                {hasStatus && <th>Status</th>}
+                <th>
+                  <span className="pf-sr">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageRows.map((doc) => (
+                <tr
+                  key={doc.id}
+                  className={`pf-table-row ${checked.includes(doc.id) ? "pf-selected" : ""}`}
+                  onClick={() => openPdf(doc)}
+                  onContextMenu={(e) => openMenu(doc, e)}
+                >
+                  <td>
+                    <div className="pf-file">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${doc.name}`}
+                        checked={checked.includes(doc.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => toggle(doc.id)}
+                      />
+                      <button
+                        className="pf-document"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openPdf(doc);
+                        }}
+                      >
+                        <span className="pf-file-icon">
+                          <FileText size={20} />
+                        </span>
+                        <span>
+                          <strong title={doc.name}>{doc.name}</strong>
+                          <small title={`${doc.ref} · ${doc.project.name}`}>
+                            {doc.ref}
+                            {selectedProject?.isAll
+                              ? ` · ${doc.project.name}`
+                              : ""}
+                          </small>
+                        </span>
+                      </button>
+                    </div>
+                  </td>
+                  <td>{dateText(doc.uploadedAt)}</td>
+                  <td>
+                    <span className="pf-person">
+                      <span className="pf-avatar">
+                        {doc.uploadedBy
+                          .split(" ")
+                          .slice(0, 2)
+                          .map((word) => word[0])
+                          .join("")}
+                      </span>
+                      <span title={doc.uploadedBy}>{doc.uploadedBy}</span>
+                    </span>
+                  </td>
+                  <td>
+                    <Badge
+                      value={isFormShared(doc.raw) ? "Shared" : "Not shared"}
+                    />
+                  </td>
+                  {hasStatus && (
+                    <td>
+                      <Badge value={doc.status} />
+                    </td>
+                  )}
+                  <td>
+                    <button
+                      className="pf-row-actions"
+                      aria-label={`Open actions for ${doc.name}`}
+                      onClick={(e) => openMenu(doc, e)}
+                    >
+                      <MoreVertical size={17} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!pageRows.length && (
+            <div className="pf-empty">
+              {busy ? (
+                <LoadingBrandmark label="Loading documents" />
+              ) : (
+                <>
+                  <FileText size={28} />
+                  <strong>
+                    {filteredOn
+                      ? "No documents match these filters"
+                      : "No documents in this selection yet"}
+                  </strong>
+                  {filteredOn && (
+                    <button onClick={clearFilters}>Clear filters</button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        <footer className="pf-pagination">
+          <span aria-live="polite">
+            Page {currentPage} of {totalPages}
+          </span>
+          <nav aria-label="Page numbers">
+            {pageNumbers.map((number, index) => (
+              <React.Fragment key={number}>
+                {index > 0 && number > pageNumbers[index - 1] + 1 && (
+                  <span>…</span>
+                )}
+                <button
+                  aria-label={`Page ${number}`}
+                  aria-current={number === currentPage ? "page" : undefined}
+                  onClick={() => setPage(number)}
+                >
+                  {number}
+                </button>
+              </React.Fragment>
+            ))}
+          </nav>
+          <nav className="pf-arrows" aria-label="Document pages">
+            <button
+              aria-label="First page"
+              disabled={currentPage === 1}
+              onClick={() => setPage(1)}
+            >
+              <ChevronsLeft size={16} />
+            </button>
+            <button
+              aria-label="Previous page"
+              disabled={currentPage === 1}
+              onClick={() => setPage(currentPage - 1)}
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              aria-label="Next page"
+              disabled={currentPage === totalPages}
+              onClick={() => setPage(currentPage + 1)}
+            >
+              <ChevronRight size={16} />
+            </button>
+            <button
+              aria-label="Last page"
+              disabled={currentPage === totalPages}
+              onClick={() => setPage(totalPages)}
+            >
+              <ChevronsRight size={16} />
+            </button>
+          </nav>
+        </footer>
+      </section>
+      {menu &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="pf-context-menu"
+            role="menu"
+            aria-label={`Actions for ${menu.doc.name}`}
+            style={{ left: menu.x, top: menu.y }}
+            onKeyDown={(e) => {
+              if (["ArrowDown", "ArrowUp"].includes(e.key)) {
+                e.preventDefault();
+                const buttons = [
+                    ...e.currentTarget.querySelectorAll(
+                      "button:not(:disabled)",
+                    ),
+                  ],
+                  i = buttons.indexOf(document.activeElement);
+                buttons[
+                  (i + (e.key === "ArrowDown" ? 1 : -1) + buttons.length) %
+                    buttons.length
+                ]?.focus();
+              }
+            }}
+          >
+            <button role="menuitem" onClick={() => openPdf(menu.doc)}>
+              <ArrowUpRight size={15} />
+              Open PDF
+            </button>
+            <button
+              role="menuitem"
+              disabled={downloading}
+              onClick={() => download([menu.doc])}
+            >
+              <Download size={15} />
+              Download PDF
+            </button>
+            {checked.includes(menu.doc.id) && selectedRows.length > 1 && (
+              <button
+                role="menuitem"
+                disabled={downloading}
+                onClick={() => download(selectedRows)}
+              >
+                <Download size={15} />
+                Download selected ({selectedRows.length})
+              </button>
+            )}
+            <button
+              role="menuitem"
+              onClick={() => {
+                toggle(menu.doc.id);
+                setMenu(null);
+              }}
+            >
+              {checked.includes(menu.doc.id) ? "Deselect file" : "Select file"}
+            </button>
+            <button
+              role="menuitem"
+              className="pf-danger"
+              onClick={() => {
+                setPendingDelete(menu.doc);
+                setMenu(null);
+              }}
+            >
+              <Trash2 size={15} />
+              Delete PDF
+            </button>
+          </div>,
+          document.body,
+        )}
+      {pendingDelete && (
+        <Modal
+          title="Delete Project Data PDF?"
+          onClose={() => {
+            if (!deleting) setPendingDelete(null);
+          }}
+        >
+          <p>
+            This will permanently delete <strong>{pendingDelete.name}</strong>{" "}
+            from {pendingDelete.project.name}.
+          </p>
+          <p>This cannot be undone.</p>
+          {error && <p role="alert">{error}</p>}
+          <footer>
+            <button disabled={deleting} onClick={() => setPendingDelete(null)}>
+              Cancel
+            </button>
+            <button
+              className="pf-danger"
+              disabled={deleting}
+              onClick={deleteDocument}
+            >
+              {deleting ? "Deleting…" : "Delete PDF"}
+            </button>
+          </footer>
+        </Modal>
+      )}
+      {createKind && (
+        <Modal
+          title={
+            createKind === "pre-starts"
+              ? "New Pre-Start"
+              : "New Day Labour/Variation"
+          }
+          onClose={() => setCreateKind(null)}
+        >
+          <p>Select the client and project for this form.</p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const builder = builders.find(
+                  (item) => item.id === createBuilder,
+                ),
+                project = builder?.projects.find(
+                  (item) => item.id === createProject,
+                );
+              if (project) launchEditor(createKind, builder, project);
+            }}
+          >
+            <label>
+              Builder
+              <select
+                required
+                aria-label="New document builder"
+                value={createBuilder}
+                onChange={(e) => {
+                  setCreateBuilder(e.target.value);
+                  setCreateProject("");
+                }}
+              >
+                <option value="">Select builder</option>
+                {builders.map((builder) => (
+                  <option key={builder.id} value={builder.id}>
+                    {builder.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Project
+              <select
+                required
+                aria-label="New document project"
+                value={createProject}
+                onChange={(e) => setCreateProject(e.target.value)}
+              >
+                <option value="">Select project</option>
+                {(
+                  builders.find((builder) => builder.id === createBuilder)
+                    ?.projects || []
+                ).map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <footer>
+              <button type="button" onClick={() => setCreateKind(null)}>
+                Cancel
+              </button>
+              <button type="submit" disabled={!createProject}>
+                Continue
+              </button>
+            </footer>
+          </form>
+        </Modal>
+      )}
+      {editor && (
+        <ScaffoldFormEditor
+          screen={editor.screen}
+          params={editor.params}
+          onClose={closeEditor}
+          onSaved={() => setReload((value) => value + 1)}
+        />
+      )}
+    </main>
+  );
 }

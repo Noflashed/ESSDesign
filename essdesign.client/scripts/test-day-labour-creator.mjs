@@ -5,7 +5,7 @@ import {getProjectDataStatus, getFormSharingStatus} from '../src/utils/projectDa
 import {getScaffTagStatus} from '../src/utils/scaffTagStatus.js';
 
 const apiSource = await readFile(new URL('../src/services/api.js', import.meta.url), 'utf8');
-const pageSource = await readFile(new URL('../src/components/ESSSafetyPage.jsx', import.meta.url), 'utf8');
+const pageSource = (await readFile(new URL('../src/utils/projectDataDocuments.js', import.meta.url), 'utf8')).replaceAll('export ', '');
 const registerSource = await readFile(new URL('../src/components/ProjectDataRegisterPage.jsx', import.meta.url), 'utf8');
 const section = (source, start, end) => source.slice(source.indexOf(start), source.indexOf(end));
 const original = {form_type:'day-labour-variations', id:'existing', builder_id:'builder', project_id:'project',
@@ -40,7 +40,7 @@ vm.runInContext([
     section(apiSource,'function mapSafetyFormRow(', 'function legacySafetyFormIndexPath('),
     section(apiSource,'async function listSafetyFormRecords(', 'async function getSafetyFormRecord('),
     section(apiSource,'async function resolveSafetyFormCreators(', 'export const scaffTagsAPI').replace('export const dayLabourVariationsAPI','globalThis.dayLabourVariationsAPI'),
-    section(pageSource,'function mapDayLabourVariationRows(', 'function mapFileRows('),
+    section(pageSource,'function mapDayLabourVariationRows(', 'function mapPreStartRows('),
     section(registerSource,'const REGISTER_CONFIG =', 'function StatusBadge('),
     'globalThis.registerConfig = REGISTER_CONFIG; globalThis.mapRegisterRows = mapRows; globalThis.registerSortValue = sortValue;'
 ].join('\n'), context);

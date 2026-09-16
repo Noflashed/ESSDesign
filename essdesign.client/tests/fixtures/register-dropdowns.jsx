@@ -20,6 +20,12 @@ let forms = builders.flatMap(builder => builder.projects.map(project => ({
  jobLocation:project.name,inspectionDateTime:'11/09/2026',date:'11/09/2026',latestInspectionDate:'11/09/2026',
  inspectionRecords:[],pdfPath:`${project.id}.pdf`,
 })));
+if (new URLSearchParams(location.search).has('many-forms')) {
+ forms = forms.flatMap(form => Array.from({length: 6}, (_, index) => ({
+  ...form, id: `${form.id}-${index}`, formReferenceName: `${form.formReferenceName} ${index + 1}`,
+  subject: `${form.subject} ${index + 1}`, updatedAt: `2026-09-${String(10 + index).padStart(2, '0')}T09:00:00Z`,
+ })));
+}
 window.__scopeActions = [];
 for (const api of [handoverCertificatesAPI,scaffTagsAPI,dayLabourVariationsAPI,preStartsAPI]) {
  api.listAllForms = async () => forms;

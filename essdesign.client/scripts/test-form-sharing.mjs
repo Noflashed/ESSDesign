@@ -73,22 +73,20 @@ try {
   if (process.env.TEST_SCREENSHOTS === "1") await page.screenshot({path:'/tmp/ess-form-shared-'+type+'.png'});
  }
  await page.goto(baseURL+'/tests/fixtures/form-sharing.html?project-data');
- for(const type of ['Scaff-tags','Handover certificates','Pre-Starts','Day Labour/Variations']) {
-  await page.locator('.project-data-kind-trigger').click();
-  await page.getByRole('option',{name:type,exact:true}).click();
-  const checks=page.getByRole('checkbox',{name:'Form Shared',exact:true});
-  await checks.first().waitFor();
-  assert.equal(await checks.count(),3,'Project Data exposes all sharing indicators');
-  assert.equal(await page.locator('.project-data-table-head > span').last().innerText(),'Form Shared');
-  for (const row of await page.locator('.project-data-table-row').all()) {
-   const lastCell = row.locator(':scope > span').last();
-   assert.equal(await lastCell.getByRole('checkbox',{name:'Form Shared'}).count(),1);
-   const cells = await row.locator(':scope > span').evaluateAll(cells => cells.map(cell => {const r=cell.getBoundingClientRect();return {x:r.x,right:r.right};}));
-   assert.ok(cells.slice(0,-1).every(cell => cell.right <= cells.at(-1).x),'Sharing is visually the far-right column');
-  }
-  const checked = page.getByRole('checkbox',{name:'Form Shared',checked:true}).first();
-  assert.equal(await checked.evaluate(el => getComputedStyle(el).backgroundColor),'rgb(107, 114, 128)');
-  if (process.env.TEST_SCREENSHOTS === "1") await page.screenshot({path:'/tmp/ess-form-shared-project-data-'+type.replaceAll('/','-')+'.png'});
+ for(const type of ['Scaff-tags','Handovers','Pre-starts','Day Labour / Variations']) {
+  await page.getByRole('button',{name:type,exact:true}).click();
+  const table=page.getByRole('table');
+  await table.getByText('Not shared',{exact:true}).waitFor();
+  assert.equal(await table.getByText('Shared',{exact:true}).count(),2);
+  assert.equal(await table.getByText('Not shared',{exact:true}).count(),1);
+  assert.equal(await page.getByRole('columnheader',{name:'Status',exact:true}).count(),['Scaff-tags','Handovers'].includes(type)?1:0);
+  await page.getByRole('button',{name:'Filters',exact:true}).click();
+  await page.getByRole('combobox',{name:'Form Shared filter',exact:true}).selectOption('false');
+  assert.equal(await page.locator('tbody tr').count(),1);
+  await page.getByRole('combobox',{name:'Form Shared filter',exact:true}).selectOption('true');
+  assert.equal(await page.locator('tbody tr').count(),2);
+  await page.getByRole('button',{name:'Reset filters',exact:true}).click();
+  await page.getByRole('button',{name:'Done',exact:true}).click();
  }
  assert.deepEqual(writes,[],'Viewing and filtering automatic checkboxes never writes form state');
  assert.deepEqual(errors,[]);

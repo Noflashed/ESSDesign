@@ -5,7 +5,7 @@ import {getProjectDataStatus, getFormSharingStatus} from '../src/utils/projectDa
 import {getScaffTagStatus} from '../src/utils/scaffTagStatus.js';
 
 const register = await readFile(new URL('../src/components/ProjectDataRegisterPage.jsx', import.meta.url), 'utf8');
-const projectData = await readFile(new URL('../src/components/ESSSafetyPage.jsx', import.meta.url), 'utf8');
+const projectData = (await readFile(new URL('../src/utils/projectDataDocuments.js', import.meta.url), 'utf8')).replaceAll('export ', '');
 const context = vm.createContext({getProjectDataStatus, getFormSharingStatus, getScaffTagStatus, makeFileRef: () => 'TAG'});
 vm.runInContext(register.slice(register.indexOf('const parseDate ='), register.indexOf('function StatusBadge('))
     + projectData.slice(projectData.indexOf('function mapScaffTagRows('), projectData.indexOf('function mapHandoverRows('))
