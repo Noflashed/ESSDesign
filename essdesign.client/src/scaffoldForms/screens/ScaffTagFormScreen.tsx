@@ -143,6 +143,11 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
   const [showDrawer, setShowDrawer] = React.useState(false);
   const [loading, setLoading] = React.useState(!!route.params.formId);
   const [saving, setSaving] = React.useState(false);
+  const [frontInsertLayout, setFrontInsertLayout] = React.useState({x: 0, y: 0});
+  const [inspectionTableY, setInspectionTableY] = React.useState(0);
+  const [inspectionHeaderHeight, setInspectionHeaderHeight] = React.useState(0);
+  const [inspectionRowLayouts, setInspectionRowLayouts] = React.useState<Record<number, {y: number; height: number}>>({});
+  const [inspectionViewport, setInspectionViewport] = React.useState({height: 0, offset: 0});
   const [documentPagerWidth, setDocumentPagerWidth] = React.useState(0);
   const [documentPagerHeight, setDocumentPagerHeight] = React.useState(0);
   const [tagPageHeights, setTagPageHeights] = React.useState({
@@ -210,6 +215,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
   const isReadOnly = route.params.readOnly === true;
   const nextInspectionIndex = form.inspectionRecords.findIndex(row => !row.date);
   const latestInspectionIndex = form.inspectionRecords.reduce((latest, row, index) => inspectionRowHasContent(row) ? index : latest, -1);
+  const latestRowLayout = inspectionRowLayouts[latestInspectionIndex] ?? {y: 0, height: 0};
   const complianceRows = complianceTableRows(form.inspectionRecords);
   React.useEffect(() => {
     setForm(previous => {
@@ -1030,11 +1036,12 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
               onLayout={event => updateTagPageHeight('front', event.nativeEvent.layout.height)}
               style={[
                 styles.tagCapturePage,
+                !isReadOnly && styles.editableFrontPage,
                 usesIOSDocumentEditor && styles.iOSTagCapturePage,
                 useSideBySideTagPages && styles.tagCapturePageSideBySide,
               ]}
             >
-              <View style={styles.scaffoldTagInsert}>
+              <View style={styles.scaffoldTagInsert} onLayout={event => setFrontInsertLayout({x: event.nativeEvent.layout.x, y: event.nativeEvent.layout.y})}>
                 <View style={styles.tagMainHeader}>
                   <Image source={company.logo} style={styles.tagEssLogo} resizeMode="contain" />
                   <View style={styles.tagHeaderTextBlock}>
@@ -1175,25 +1182,23 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                 <View style={styles.authorisedHeader}>
                   <Text style={styles.authorisedHeaderText}>AUTHORISED PERSON</Text>
                 </View>
-                <View style={styles.authorisedTable}>
-                  <View style={[styles.authorisedTableHeader, !isReadOnly && styles.inspectionDeleteGutter, form.inspectionRecords.length > 10 && styles.scrollTableHeader]}>
+                <View style={styles.authorisedTable} onLayout={event => setInspectionTableY(event.nativeEvent.layout.y)}>
+                  <View onLayout={event => setInspectionHeaderHeight(event.nativeEvent.layout.height)} style={[styles.authorisedTableHeader, form.inspectionRecords.length > 10 && styles.scrollTableHeader]}>
                     <Text style={[styles.authHeaderCell, styles.authDateCell]}>DATE</Text>
                     <Text style={[styles.authHeaderCell, styles.authTimeCell]}>TIME</Text>
                     <Text style={[styles.authHeaderCell, styles.authNameCell]}>NAME</Text>
                     <Text style={[styles.authHeaderCell, styles.authSignatureCell]}>SIGNATURE</Text>
                   </View>
-                  <ScaffTagTableScroll maxHeight={390} enabled={form.inspectionRecords.length > 10}>
+                  <ScaffTagTableScroll onMetricsChange={setInspectionViewport} maxHeight={390} enabled={form.inspectionRecords.length > 10}>
                   {form.inspectionRecords.map((row, index) => {
                     const isActive = inspectionRowHasContent(row);
                     return (
-                      <View key={`front-auth-${index}`} style={[styles.authorisedTableRow, !isReadOnly && styles.inspectionDeleteRowGutter]}>
-                        {!isReadOnly && index === latestInspectionIndex && <TouchableOpacity
-                          accessibilityRole="button"
-                          accessibilityLabel={`Remove latest inspection, row ${index + 1}`}
-                          style={styles.latestInspectionDelete}
-                          onPress={() => confirmRemoveInspection(index)}>
-                          <Feather name="minus-circle" size={20} color="#B42318" />
-                        </TouchableOpacity>}
+                      <View key={`front-auth-${index}`} style={styles.authorisedTableRow}
+                        onLayout={event => {
+                          const {y, height} = event.nativeEvent.layout;
+                          setInspectionRowLayouts(previous => previous[index]?.y === y && previous[index]?.height === height
+                            ? previous : {...previous, [index]: {y, height}});
+                        }}>
                         <View
                           collapsable={false}
                           style={[styles.authCellButton, styles.authDateCell]}>
@@ -1267,6 +1272,20 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                   <Text style={styles.frontCautionIcon}>!</Text>
                 </View>
               </View>
+              {!isReadOnly && !saving && latestInspectionIndex >= 0 && latestRowLayout.height > 0
+                && latestRowLayout.y - inspectionViewport.offset >= 0
+                && latestRowLayout.y - inspectionViewport.offset + latestRowLayout.height <= inspectionViewport.height + 1
+                && <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove latest inspection"
+                  style={[styles.latestInspectionDelete, {
+                    left: frontInsertLayout.x - 30,
+                    top: frontInsertLayout.y + 1.5 + inspectionTableY + inspectionHeaderHeight + latestRowLayout.y - inspectionViewport.offset,
+                    height: latestRowLayout.height,
+                  }]}
+                  onPress={() => confirmRemoveInspection(latestInspectionIndex)}>
+                  <Feather name="minus-circle" size={20} color="#B42318" />
+                </TouchableOpacity>}
             </View>
 
             <View
@@ -1879,13 +1898,9 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       justifyContent: 'center',
       paddingHorizontal: 4,
     },
-    inspectionDeleteGutter: {marginLeft: 28},
-    inspectionDeleteRowGutter: {paddingLeft: 28},
+    editableFrontPage: {paddingLeft: 42},
     latestInspectionDelete: {
       position: 'absolute',
-      left: 0,
-      top: 0,
-      bottom: 0,
       width: 28,
       alignItems: 'center',
       justifyContent: 'center',

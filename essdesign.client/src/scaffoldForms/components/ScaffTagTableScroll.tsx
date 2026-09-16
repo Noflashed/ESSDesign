@@ -1,12 +1,15 @@
 import React from 'react';
 import {ScrollView, StyleSheet, View} from 'react-native';
 
-type Props = {children: React.ReactNode; maxHeight: number; enabled: boolean};
+type Props = {children: React.ReactNode; maxHeight: number; enabled: boolean; onMetricsChange?: (metrics: {height: number; offset: number}) => void};
 
-export default function ScaffTagTableScroll({children, maxHeight, enabled}: Props) {
+export default function ScaffTagTableScroll({children, maxHeight, enabled, onMetricsChange}: Props) {
   const [viewport, setViewport] = React.useState(0);
   const [content, setContent] = React.useState(0);
   const [offset, setOffset] = React.useState(0);
+  React.useEffect(() => {
+    onMetricsChange?.({height: viewport, offset});
+  }, [viewport, offset, onMetricsChange]);
   const trackHeight = Math.max(0, viewport - 12);
   const thumbHeight = Math.min(trackHeight, Math.max(30, trackHeight * viewport / Math.max(content, 1)));
   const thumbTop = Math.min(1, Math.max(0, offset / Math.max(1, content - viewport))) * (trackHeight - thumbHeight);
