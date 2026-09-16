@@ -26,27 +26,73 @@ const count = async (expected) => {
 };
 try {
   await page.goto(
-    `${baseURL}/tests/fixtures/register-dropdowns.html?project-data`,
+    `${baseURL}/tests/fixtures/register-dropdowns.html?project-data&slow-load`,
+  );
+  const loader = page.locator(".pf-initial-loading");
+  await loader.waitFor();
+  assert.equal(
+    await loader.evaluate((e) => getComputedStyle(e).backgroundColor),
+    "rgb(255, 255, 255)",
+  );
+  const bounds = await loader.boundingBox();
+  const logo = await loader.locator(".loading-brandmark").boundingBox();
+  assert.ok(
+    Math.abs(logo.x + logo.width / 2 - bounds.x - bounds.width / 2) < 2,
+  );
+  assert.ok(
+    Math.abs(logo.y + logo.height / 2 - bounds.y - bounds.height / 2) < 2,
   );
   await count(3);
+  await page.waitForFunction(
+    () => document.querySelector(".pf-avatar img")?.naturalWidth > 0,
+  );
+
   await page.getByRole("button", { name: "Builder", exact: true }).click();
   await page
     .getByRole("option", { name: "Alpha Builder", exact: true })
     .click();
   await count(2);
-  await page.waitForFunction(()=>document.querySelector('.pf-scope .scaffold-register-dropdown-trigger img')?.naturalWidth>0);
-  await page.getByRole('button',{name:'Builder',exact:true}).click();
-  assert.equal(await page.getByRole('option',{name:'Alpha Builder',exact:true}).locator('img').count(),1);
-  await page.keyboard.press('Escape');
-  assert.equal(await page.locator('.project-files-page').evaluate(e=>getComputedStyle(e).fontFamily),'Arial, sans-serif');
-  assert.equal(await page.locator('.pf-document strong').first().evaluate(e=>getComputedStyle(e).fontWeight),'500');
-  await page
-    .getByRole("combobox", { name: "Project", exact: true })
-    .selectOption("north");
+  await page.waitForFunction(
+    () =>
+      document.querySelector(
+        ".pf-scope .scaffold-register-dropdown-trigger img",
+      )?.naturalWidth > 0,
+  );
+  await page.getByRole("button", { name: "Builder", exact: true }).click();
+  assert.equal(
+    await page
+      .getByRole("option", { name: "Alpha Builder", exact: true })
+      .locator("img")
+      .count(),
+    1,
+  );
+  await page.keyboard.press("Escape");
+  assert.equal(
+    await page
+      .locator(".project-files-page")
+      .evaluate((e) => getComputedStyle(e).fontFamily),
+    '"Google Sans", Roboto, Arial, sans-serif',
+  );
+  assert.equal(
+    await page
+      .locator(".pf-document strong")
+      .first()
+      .evaluate((e) => getComputedStyle(e).fontWeight),
+    "500",
+  );
+  await page.getByRole("button", { name: "Project", exact: true }).click();
+  await page.getByRole("option", { name: "North Site", exact: true }).click();
   await count(1);
-  await page
-    .getByRole("combobox", { name: "Project", exact: true })
-    .selectOption("__all__");
+  assert.equal(await page.locator(".loading-brandmark").count(), 0);
+  await page.waitForFunction(
+    () =>
+      document.querySelectorAll(
+        ".pf-scope .scaffold-register-dropdown-trigger img",
+      ).length === 2,
+  );
+
+  await page.getByRole("button", { name: "Project", exact: true }).click();
+  await page.getByRole("option", { name: "All Projects", exact: true }).click();
   await count(2);
   await page.getByRole("button", { name: "Builder", exact: true }).click();
   await page.getByRole("option", { name: "All Builders", exact: true }).click();
@@ -146,13 +192,13 @@ try {
     projectId: "west",
     id: "shared-form-id",
   });
+  await page.getByRole("button", { name: "Project", exact: true }).click();
   await page
-    .getByRole("combobox", { name: "Project", exact: true })
-    .selectOption({ label: "South Site — Alpha Builder" });
+    .getByRole("option", { name: "South Site — Alpha Builder", exact: true })
+    .click();
   await count(1);
-  await page
-    .getByRole("combobox", { name: "Project", exact: true })
-    .selectOption("__all__");
+  await page.getByRole("button", { name: "Project", exact: true }).click();
+  await page.getByRole("option", { name: "All Projects", exact: true }).click();
   await page
     .getByRole("button", { name: "New Day Labour/Variation", exact: true })
     .click();
@@ -220,9 +266,8 @@ try {
   await page
     .getByRole("option", { name: "Alpha Builder", exact: true })
     .click();
-  await page
-    .getByRole("combobox", { name: "Project", exact: true })
-    .selectOption("north");
+  await page.getByRole("button", { name: "Project", exact: true }).click();
+  await page.getByRole("option", { name: "North Site", exact: true }).click();
   for (const [button, dialog] of [
     ["New Day Labour/Variation", "Day Labour form"],
     ["New Pre-Start", "Pre-Start form"],
@@ -241,9 +286,8 @@ try {
     await page
       .getByRole("option", { name: "Alpha Builder", exact: true })
       .click();
-    await page
-      .getByRole("combobox", { name: "Project", exact: true })
-      .selectOption("north");
+    await page.getByRole("button", { name: "Project", exact: true }).click();
+    await page.getByRole("option", { name: "North Site", exact: true }).click();
   }
   assert.deepEqual(errors, []);
   console.log(

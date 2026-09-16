@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { zipSync } from "fflate";
 import {
+  usersAPI,
+  resolveProfileImageUrls,
   safetyProjectsAPI,
   scaffTagsAPI,
   handoverCertificatesAPI,
@@ -97,6 +99,28 @@ const fileName = (doc) =>
   `${doc.ref}-${doc.name}`
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")
     .replace(/(?:\.pdf)?$/i, ".pdf");
+function ProfileAvatar({ name, src }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  return (
+    <span className="pf-avatar">
+      {src && !failed ? (
+        <img
+          src={src}
+          alt={name}
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        name
+          .split(" ")
+          .slice(0, 2)
+          .map((word) => word[0])
+          .join("")
+      )}
+    </span>
+  );
+}
 function Badge({ value }) {
   return (
     <span
@@ -193,6 +217,62 @@ export default function ESSSafetyPage() {
       active = false;
     };
   }, []);
+  const [initialLoaded, setInitialLoaded] = useState(false);
+  const [profileUsers, setProfileUsers] = useState([]);
+  const [profileImages, setProfileImages] = useState({});
+  useEffect(() => {
+    let active = true;
+    usersAPI
+      .getNotificationRecipients()
+      .then((users) => {
+        if (active) setProfileUsers(users);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+  const profileUser = (doc) => {
+    const matches = profileUsers.filter((user) =>
+      doc.kind === "day-labour-variations"
+        ? user.id === doc.raw.createdByUserId
+        : user.fullName?.trim().toLowerCase() ===
+          doc.uploadedBy.trim().toLowerCase(),
+    );
+    return matches.length === 1 ? matches[0] : null;
+  };
+  useEffect(() => {
+    let active = true;
+    const ids = documents
+      .map((doc) =>
+        doc.kind === "day-labour-variations"
+          ? doc.raw.createdByUserId
+          : profileUser(doc)?.id,
+      )
+      .filter(Boolean);
+    resolveProfileImageUrls(ids)
+      .then((images) => {
+        if (active) setProfileImages(images);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [documents, profileUsers]);
+  const profileImage = (doc) => {
+    const user = profileUser(doc);
+    return (
+      profileImages[
+        doc.kind === "day-labour-variations"
+          ? doc.raw.createdByUserId
+          : user?.id
+      ] ||
+      user?.profileImageUrl ||
+      user?.avatarUrl ||
+      user?.picture ||
+      ""
+    );
+  };
   const [builderLogos, setBuilderLogos] = useState({});
   useEffect(() => {
     let active = true;
@@ -238,6 +318,7 @@ export default function ESSSafetyPage() {
   );
   useEffect(() => {
     let active = true;
+    if (loading) return;
     setBusy(true);
     setError("");
     setDocuments([]);
@@ -293,11 +374,12 @@ export default function ESSSafetyPage() {
           `Could not load ${failed.join(", ")}. Please refresh to retry.`,
         );
       setBusy(false);
+      setInitialLoaded(true);
     });
     return () => {
       active = false;
     };
-  }, [scopeProjects, reload]);
+  }, [scopeProjects, reload, loading]);
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState === "visible")
@@ -337,7 +419,7 @@ export default function ESSSafetyPage() {
       window.removeEventListener("resize", resize);
       observer.disconnect();
     };
-  }, [loading]);
+  }, [loading, initialLoaded]);
   useEffect(() => {
     const dismiss = (e) => {
       if (!filterRef.current?.contains(e.target)) setFiltersOpen(false);
@@ -558,9 +640,9 @@ export default function ESSSafetyPage() {
       totalPages,
     ]),
   ].sort((a, b) => a - b);
-  if (loading)
+  if (loading || !initialLoaded)
     return (
-      <div className="module-page">
+      <div ref={rootRef} className="pf-initial-loading" style={{ height }}>
         <LoadingBrandmark label="Loading project data" />
       </div>
     );
@@ -670,17 +752,23 @@ export default function ESSSafetyPage() {
                 setProjectId(scope.projectId);
               }}
             />
-            <select
-              aria-label="Project"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-            >
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
+            <RegisterDropdown
+              label="Project"
+              selectedItem={selectedProject}
+              items={projects}
+              getLabel={(item) => item.name}
+              getLogoName={(item) =>
+                builders.find((builder) => builder.id === item.builderId)
+                  ?.name || item.name
+              }
+              getLogoUrl={(item) =>
+                builderLogos[item.builderId] ||
+                builders.find((builder) => builder.id === item.builderId)
+                  ?.logoUrl ||
+                ""
+              }
+              onSelect={(item) => setProjectId(item.id)}
+            />
           </div>
           <label className="pf-search">
             <Search size={16} />
@@ -893,13 +981,10 @@ export default function ESSSafetyPage() {
                   <td>{dateText(doc.uploadedAt)}</td>
                   <td>
                     <span className="pf-person">
-                      <span className="pf-avatar">
-                        {doc.uploadedBy
-                          .split(" ")
-                          .slice(0, 2)
-                          .map((word) => word[0])
-                          .join("")}
-                      </span>
+                      <ProfileAvatar
+                        name={doc.uploadedBy}
+                        src={profileImage(doc)}
+                      />
                       <span title={doc.uploadedBy}>{doc.uploadedBy}</span>
                     </span>
                   </td>
@@ -929,7 +1014,7 @@ export default function ESSSafetyPage() {
           {!pageRows.length && (
             <div className="pf-empty">
               {busy ? (
-                <LoadingBrandmark label="Loading documents" />
+                <span role="status">Updating documents...</span>
               ) : (
                 <>
                   <FileText size={28} />

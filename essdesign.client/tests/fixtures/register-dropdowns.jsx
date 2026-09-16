@@ -4,21 +4,25 @@ import '../../src/index.css';
 import {createRoot} from 'react-dom/client';
 import ESSSafetyPage from '../../src/components/ESSSafetyPage';
 import ProjectDataRegisterPage from '../../src/components/ProjectDataRegisterPage';
-import {safetyFilesAPI, safetyProjectsAPI, handoverCertificatesAPI, scaffTagsAPI, scaffTagQrLabelsAPI, dayLabourVariationsAPI, preStartsAPI} from '../../src/services/api';
+import {usersAPI, safetyFilesAPI, safetyProjectsAPI, handoverCertificatesAPI, scaffTagsAPI, scaffTagQrLabelsAPI, dayLabourVariationsAPI, preStartsAPI} from '../../src/services/api';
 const registerType = new URLSearchParams(location.search).get('type') || 'handovers';
 const builders = [
  {id:'alpha',name:'Alpha Builder',logoUrl:'/scaffold-forms/logo.png',projects:[{id:'north',name:'North Site'},{id:'south',name:'South Site'}]},
  {id:'beta',name:'Beta Builder',projects:[{id:'west',name:'West Site'}]},
  {id:'empty',name:'Empty Builder',projects:[]},
 ];
-safetyProjectsAPI.getBuilders = async () => builders;
+safetyProjectsAPI.getBuilders = async () => {
+ if (new URLSearchParams(location.search).has('slow-load')) await new Promise(resolve => setTimeout(resolve, 700));
+ return builders;
+};
+usersAPI.getNotificationRecipients = async () => [{id:'fixture-user',fullName:'Fixture Inspector',profileImageUrl:'/scaffold-forms/logo.png'}];
 safetyProjectsAPI.resolveBuilderLogoUrl = async () => '/scaffold-forms/logo.png';
 let forms = builders.flatMap(builder => builder.projects.map(project => ({
  id:'shared-form-id', builderId:builder.id,projectId:project.id,
  formReferenceName:`${project.name} form`,subject:`${project.name} form`,
  inspectionNumber:project.id,preStartNumber:project.id,variationNumber:project.id,scaffoldNo:project.id,
  jobLocation:project.name,inspectionDateTime:'11/09/2026',date:'11/09/2026',latestInspectionDate:'11/09/2026',
- inspectionRecords:[],pdfPath:`${project.id}.pdf`,
+ inspectedBy:'Fixture Inspector',inspectionRecords:[],pdfPath:`${project.id}.pdf`,
 })));
 if (new URLSearchParams(location.search).has('many-forms')) {
  forms = forms.flatMap(form => Array.from({length: 6}, (_, index) => ({
