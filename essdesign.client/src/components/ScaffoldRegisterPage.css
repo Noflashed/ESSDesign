@@ -789,7 +789,7 @@
 @media (max-width:1100px) { .scaffold-register-toolbar { flex-wrap:wrap; } .scaffold-register-dropdowns { flex:1; } .scaffold-register-toolbar-actions { flex:1; } }
 @media (max-width:700px) { .scaffold-register-page { padding:16px; gap:18px; } .scaffold-register-action-bar { align-items:flex-start; } .scaffold-register-action-bar .scaffold-register-add { padding:10px; font-size:12px; } .scaffold-register-tabs { gap:0; overflow:auto; } .scaffold-register-tabs button { padding:10px 8px; gap:5px; font-size:12px; } .scaffold-register-card-grid { grid-template-columns:minmax(0,1fr); } .scaffold-register-toolbar .scaffold-register-dropdown { width:100%; min-width:0; } .scaffold-register-dropdowns { flex-direction:column; width:100%; } .scaffold-register-toolbar-actions { width:100%; } }
 .scaffold-card-qr { display:flex; flex-direction:column; align-items:center; gap:3px; width:64px; flex-shrink:0; color:#1764d5; text-decoration:none; font-size:10px; font-weight:600; border-radius:6px; }
-.scaffold-card-qr img { width:64px; height:64px; display:block; border:1px solid var(--border-color,#dfe6ee); border-radius:5px; background:white; }
+.scaffold-card-qr img { width:64px; height:70px; object-fit:contain; display:block; border:1px solid var(--border-color,#dfe6ee); border-radius:5px; background:white; }
 .scaffold-card-qr:hover img { border-color:#1764d5; box-shadow:0 0 0 2px #1764d522; }
 .scaffold-card-qr:focus-visible { outline:2px solid #1764d5; outline-offset:3px; }
 .scaffold-card-qr.is-unassigned { color:var(--text-secondary,#64748b); opacity:.5; padding-top:8px; }
