@@ -19,8 +19,10 @@ const base = {builderId:client.id, projectId:project.id, builderName:client.name
 const records = names.map((name,i) => ({...base,id:`sample-${i}`, scaffoldName:name, location:locations[i], status:i===4?'awaiting-qr':i===5?'dismantled':'active', activatedAt:i===4?'':ago(days[i]+.1), dismantledAt:i===5?ago(2):'',updatedAt:ago(i/10), createdAt:ago(days[i]), drawingDocumentId:i===0?'':`drawing-${i}`,drawingDocumentType:'ess',drawingNumber:`D${[100,104,108,112,115,99][i]} · Rev ${i%2?'C':'A'}`}));
 const tags = records.filter((_,i)=>i!==4).map((r,i)=>({...base,id:`tag-${r.id}`,scaffoldRegisterId:r.id,scaffoldNo:r.scaffoldName,tagNumber:String(21-i).padStart(4,'0'),jobLocation:project.name,status:r.status==='dismantled'?'retired':'active',dateErected:dateAgo(days[names.indexOf(r.scaffoldName)]),inspectionRecords:[{date:dateAgo(days[names.indexOf(r.scaffoldName)]),time:'9:30 am',competentPerson:'Nathan Borg',note:'Scaffold compliant',signatureStrokes:[]}],photoPaths:[],qrLabelStatus:r.status==='dismantled'?'retired':'assigned',qrLabelNumber:`ST000${i+1}`,qrLabelAssignedAt:r.activatedAt,qrTargetUrl:`${location.origin}/tests/fixtures/sample-scaffold-qr.html?name=${encodeURIComponent(r.scaffoldName)}&label=ST000${i+1}`,updatedAt:r.updatedAt,createdAt:r.createdAt,inspectedBy:'Nathan Borg'}));
 const handovers = records.filter((_,i)=>i!==4).map((r,i)=>({...base,id:`handover-${r.id}`,scaffoldRegisterId:r.id,formReferenceName:r.scaffoldName,inspectionNumber:String(21-i).padStart(4,'0'),inspectionDateTime:dateAgo(days[i]),updatedAt:r.updatedAt,createdAt:r.createdAt,photoSlots:[]}));
+const reports = [0,1,2,3].map(i=>({...handovers[0],id:`inspection-sample-${i}`,documentKind:'inspection-report',sourceHandoverId:handovers[0].id,sourceScaffTagId:tags[0].id,sourceInspectionRowId:`row-${i}`,inspectionDateTime:`16/${String(i+9).padStart(2,'0')}/2026 9:30 am`,photoSlots:[],projectNumberClient:'Burwood North Station / ABI Civil',comments:'Copied handover comments',companyEntityId:i===3?'maloo':'ess'}));
 const store = new Map();
-for (const [type,list] of [['scaffold-register',records],['scaff-tags',tags],['handover-certificates',handovers]]) list.forEach(form=>store.set(type+':'+form.id,{id:form.id,form_type:type,builder_id:client.id,project_id:project.id,payload:form,updated_at:form.updatedAt}));
+window.__sampleSafetyStore = store;
+for (const [type,list] of [['scaffold-register',records],['scaff-tags',tags],['handover-certificates',handovers],['inspection-reports',reports]]) list.forEach(form=>store.set(type+':'+form.id,{id:form.id,form_type:type,builder_id:client.id,project_id:project.id,payload:form,updated_at:form.updatedAt}));
 safetyProjectsAPI.getBuilders = async()=>[client];
 safetyProjectsAPI.resolveBuilderLogoUrl = async()=>'';
 authAPI.getCurrentUser = ()=>({id:'sample-user',fullName:'Nathan Borg',email:'sample@example.test'});
@@ -40,7 +42,7 @@ nativeAPI.fetchSupabase=async(url,options={})=>{
   return respond(matches);
  }
  if(path.pathname.includes('/rpc/'))return respond('00022');
- if(path.pathname.includes('/storage/'))return respond({forms:[],Key:path.pathname});
+ if(path.pathname.includes('/storage/')){if(options.headers?.['Content-Type']==='application/pdf')window.__sampleReportPdf=options.body;return respond({forms:[],Key:path.pathname});}
  return respond([]);
 };
 // Block accidental live requests from editor or document integrations in this preview.

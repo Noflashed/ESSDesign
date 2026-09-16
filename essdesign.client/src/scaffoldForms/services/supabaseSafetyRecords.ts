@@ -6,6 +6,7 @@ import api from './apiService';
 export type SafetyFormType =
   | 'scaff-tags'
   | 'handover-certificates'
+  | 'inspection-reports'
   | 'day-labour-variations'
   | 'scaffold-register'
   | 'pre-starts';

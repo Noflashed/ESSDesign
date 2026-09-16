@@ -1,5 +1,7 @@
 // Derived from ESSApp/src/services/supabaseHandoverCertificates.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {inspectionReportTitle} from '../utils/inspectionReportTitle';
 import {resolveScaffoldFormStatus, ScaffoldFormStatus} from '../utils/scaffoldFormStatus';
+import {resolveScaffoldFormDate, refreshLinkedScaffoldDateDocuments} from './scaffoldFormDates';
 import type {ScaffoldRegisterRecord} from './supabaseScaffoldRegister';
 import {formatMetres} from '../utils/measurements';
 import {AppConstants} from '../utils/constants';
@@ -19,7 +21,6 @@ import {
   getCompanyLogoJpegBase64,
   normalizeCompanyEntityId,
 } from '../config/companyEntities';
-import {sydneyNowDisplayDateTime} from '../utils/sydneyTime';
 
 export type HandoverChecklistStatus = 'YES' | 'NO' | 'NA' | '';
 export type HandoverAccessType = 'stretcher-stair' | 'aluminium-access-stair' | 'ladder-access' | '';
@@ -44,6 +45,13 @@ export interface HandoverActionRow {
 }
 
 export interface HandoverCertificateForm {
+  documentKind?: 'inspection-report';
+  sourceHandoverId?: string;
+  sourceScaffTagId?: string;
+  sourceInspectionRowId?: string;
+  reportTitle?: string;
+
+  dateManuallySet?: boolean;
   completedAt?: string;
   completedByUserId?: string;
   id: string;
@@ -91,6 +99,10 @@ export interface HandoverCertificateForm {
 }
 
 export interface HandoverCertificateListItem {
+  documentKind?: 'inspection-report';
+  sourceScaffTagId?: string;
+  reportTitle?: string;
+
   scaffoldStatus?: ScaffoldFormStatus;
   completedAt?: string;
   completedByUserId?: string;
@@ -186,10 +198,6 @@ const HANDOVER_CHECKLIST_SECTIONS: Array<{title: string; items: Array<{id: strin
 
 function nowIso(): string {
   return new Date().toISOString();
-}
-
-function nowInspectionDateTime(): string {
-  return sydneyNowDisplayDateTime();
 }
 
 function id(): string {
@@ -640,7 +648,7 @@ export async function buildHandoverCertificatePdfBody(form: HandoverCertificateF
     target.push(canvas.text(181, 80, 7.4, `ABN: ${company.abn}`));
     target.push(canvas.text(181, 91, 7.4, `Office Address: ${company.officeAddress}`));
     target.push(canvas.text(181, 102, 7.4, `PH: ${company.phone}   FAX: ${company.fax}`));
-    target.push(canvas.rightText(744, 72, 15, companyFormTitle(company.id, 'Handover Certificate'), 'F2'));
+    target.push(canvas.rightText(744, 72, 15, companyFormTitle(company.id, form.documentKind === 'inspection-report' ? 'Inspection Report' : 'Handover Certificate'), 'F2'));
     if (!withInspection) {
       return;
     }
@@ -1049,13 +1057,17 @@ async function previewInspectionNumberViaRpc(builderId: string, projectId: strin
 export async function listHandoverCertificateForms(
   builderId: string,
   projectId: string,
+  inspectionReports = false,
 ): Promise<HandoverCertificateListItem[]> {
   const [forms, records, tags] = await Promise.all([
-    listSafetyForms<HandoverCertificateForm>('handover-certificates', builderId, projectId),
+    listSafetyForms<HandoverCertificateForm>(inspectionReports ? 'inspection-reports' : 'handover-certificates', builderId, projectId),
     listSafetyForms<ScaffoldRegisterRecord>('scaffold-register', builderId, projectId),
     listSafetyForms<import('./supabaseScaffTags').ScaffTagForm>('scaff-tags', builderId, projectId),
   ]);
   return forms.map(form => ({
+    documentKind: form.documentKind,
+    sourceScaffTagId: form.sourceScaffTagId,
+    reportTitle: form.reportTitle,
     scaffoldStatus: resolveScaffoldFormStatus(form, records, tags),
     completedAt: form.completedAt,
     completedByUserId: form.completedByUserId,
@@ -1091,9 +1103,10 @@ export async function getHandoverCertificateForm(
   builderId: string,
   projectId: string,
   formId: string,
+  inspectionReport = false,
 ): Promise<HandoverCertificateForm | null> {
   const raw = await getSafetyForm<HandoverCertificateForm>(
-    'handover-certificates',
+    inspectionReport ? 'inspection-reports' : 'handover-certificates',
     builderId,
     projectId,
     formId,
@@ -1185,14 +1198,20 @@ export async function getHandoverCertificatePhotoUrl(path: string): Promise<stri
 
 export async function getHandoverCertificatePdfUrl(
   form:
-    | Pick<HandoverCertificateForm, 'pdfPath'>
-    | {builderId: string; projectId: string; formId: string},
+    | (Pick<HandoverCertificateForm, 'pdfPath'> & {updatedAt?: string})
+    | {builderId: string; projectId: string; formId: string; inspectionReport?: boolean},
 ): Promise<string> {
   if ('pdfPath' in form) {
-    return signedPathUrl(form.pdfPath, 60 * 60 * 24 * 14);
+    const url = await signedPathUrl(form.pdfPath, 60 * 60 * 24 * 14);
+    return `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(form.updatedAt || String(Date.now()))}`;
   }
-  const saved = await getHandoverCertificateForm(form.builderId, form.projectId, form.formId);
-  return signedPathUrl(saved?.pdfPath || pdfObjectPath(form.builderId, form.projectId, form.formId), 60 * 60 * 24 * 14);
+  const saved = await getHandoverCertificateForm(form.builderId, form.projectId, form.formId, form.inspectionReport);
+  if (form.inspectionReport && saved) {
+    const path = saved.pdfPath || pdfObjectPath(form.builderId, form.projectId, form.formId);
+    await uploadObject(path, await buildHandoverCertificatePdfBody(saved), 'application/pdf');
+  }
+  const url = await signedPathUrl(saved?.pdfPath || pdfObjectPath(form.builderId, form.projectId, form.formId), 60 * 60 * 24 * 14);
+  return `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(saved?.updatedAt || String(Date.now()))}`;
 }
 
 export async function saveHandoverCertificateForm(
@@ -1200,28 +1219,42 @@ export async function saveHandoverCertificateForm(
     id?: string;
     createdAt?: string;
     pdfBlob?: Blob | string;
+    dateManuallySet?: boolean;
   },
 ): Promise<HandoverCertificateForm> {
-  const {pdfBlob, ...input} = form;
+  const {pdfBlob, dateManuallySet, ...input} = form;
+  const isReport = input.documentKind === 'inspection-report';
+  const formType = isReport ? 'inspection-reports' : 'handover-certificates';
   const formId = form.id ?? id();
-  const createdAt = form.createdAt ?? nowIso();
   const updatedAt = nowIso();
-  const existing = form.id ? await getHandoverCertificateForm(form.builderId, form.projectId, formId) : null;
-  const pdfPath = existing?.pdfPath ?? pdfObjectPath(form.builderId, form.projectId, formId);
+  const existing = form.id ? await getHandoverCertificateForm(form.builderId, form.projectId, formId, isReport) : null;
+  const createdAt = existing?.createdAt ?? form.createdAt ?? nowIso();
+  const pdfPath = existing?.pdfPath || pdfObjectPath(form.builderId, form.projectId, formId);
+  const inspectionDateTime = isReport ? form.inspectionDateTime : await resolveScaffoldFormDate({
+    type: 'handover-certificates',
+    builderId: form.builderId,
+    projectId: form.projectId,
+    linkedFormId: form.scaffTagFormId,
+    value: form.inspectionDateTime,
+    existingValue: existing?.inspectionDateTime,
+    isNew: !existing,
+    dateManuallySet,
+  });
   // A number shown while composing is only a preview. Supabase assigns the
   // authoritative global number on the first save; subsequent edits retain it.
-  let inspectionNumber = existing?.inspectionNumber?.trim() ?? '';
-  if (!inspectionNumber) {
+  let inspectionNumber = existing?.inspectionNumber?.trim() || (isReport ? input.inspectionNumber : '');
+  if (!inspectionNumber && !isReport) {
     inspectionNumber = await allocateInspectionNumberViaRpc(form.builderId, form.projectId);
   }
 
-  const nextForm: HandoverCertificateForm = {
+  let nextForm: HandoverCertificateForm = {
+    ...existing,
     ...input,
+    dateManuallySet: dateManuallySet === true || existing?.dateManuallySet === true,
     id: formId,
     inspectionNumber,
-    // Inspection date/time represents the latest completed inspection. Every
-    // successful save refreshes it before the PDF and list record are rebuilt.
-    inspectionDateTime: nowInspectionDateTime(),
+    inspectionDateTime,
+    ...(isReport ? {reportTitle: inspectionReportTitle(inspectionDateTime)} : {}),
     correctiveActions: (form.correctiveActions ?? []).slice(0, 4),
     photoSlots: [...(form.photoSlots ?? [])].sort((a, b) => a.slot - b.slot),
     pdfPath,
@@ -1229,19 +1262,13 @@ export async function saveHandoverCertificateForm(
     updatedAt,
   };
 
-  const nextPdfBody = pdfBlob ?? await buildHandoverCertificatePdfBody(nextForm);
-  await uploadObject(
-    pdfPath,
-    nextPdfBody,
-    'application/pdf',
-  );
-  await upsertSafetyForm(
-    'handover-certificates',
+  const stored = await upsertSafetyForm(
+    formType,
     form.builderId,
     form.projectId,
     nextForm,
     {
-      title: nextForm.formReferenceName,
+      title: nextForm.reportTitle || nextForm.formReferenceName,
       referenceNumber: nextForm.inspectionNumber,
       requestedBy: nextForm.essRepresentativeName,
       projectLabel: nextForm.projectNumberClient,
@@ -1250,7 +1277,18 @@ export async function saveHandoverCertificateForm(
       photoPaths: nextForm.photoSlots.map(item => item.path),
     },
   );
+  nextForm = {...nextForm, inspectionDateTime: stored.inspectionDateTime, dateManuallySet: stored.dateManuallySet, updatedAt: stored.updatedAt};
+  const nextPdfBody = pdfBlob && nextForm.inspectionDateTime === input.inspectionDateTime
+    ? pdfBlob : await buildHandoverCertificatePdfBody(nextForm);
+  await uploadObject(pdfPath, nextPdfBody, 'application/pdf');
+  if (!isReport) await refreshLinkedScaffoldDateDocuments('handover-certificates', nextForm);
   return nextForm;
+}
+
+export async function refreshHandoverDateDocument(builderId: string, projectId: string, formId: string): Promise<void> {
+  const form = await getHandoverCertificateForm(builderId, projectId, formId);
+  if (!form) { throw new Error('The linked handover could not be refreshed.'); }
+  await uploadObject(form.pdfPath, await buildHandoverCertificatePdfBody(form), 'application/pdf');
 }
 
 /**
@@ -1286,7 +1324,7 @@ export async function setHandoverCertificateScaffTagLink(
     projectId,
     nextForm,
     {
-      title: nextForm.formReferenceName,
+      title: nextForm.reportTitle || nextForm.formReferenceName,
       referenceNumber: nextForm.inspectionNumber,
       requestedBy: nextForm.essRepresentativeName,
       projectLabel: nextForm.projectNumberClient,
@@ -1334,7 +1372,7 @@ export async function setHandoverCertificateDrawingLink(
     projectId,
     nextForm,
     {
-      title: nextForm.formReferenceName,
+      title: nextForm.reportTitle || nextForm.formReferenceName,
       referenceNumber: nextForm.inspectionNumber,
       requestedBy: nextForm.essRepresentativeName,
       projectLabel: nextForm.projectNumberClient,
@@ -1374,7 +1412,7 @@ export async function setHandoverCertificateScaffoldRecord(
     projectId,
     nextForm,
     {
-      title: nextForm.formReferenceName,
+      title: nextForm.reportTitle || nextForm.formReferenceName,
       referenceNumber: nextForm.inspectionNumber,
       requestedBy: nextForm.essRepresentativeName,
       projectLabel: nextForm.projectNumberClient,

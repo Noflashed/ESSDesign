@@ -19,6 +19,7 @@ utils/measurements.ts utils/scaffoldLifecycle.ts utils/scaffoldFormStatus.ts'''.
 files += '''screens/PreStartFormScreen.tsx components/PreStartDocumentEditor.tsx
 components/ProjectDataDatePicker.tsx models/preStart.ts models/preStartDocument.ts
 models/preStartEditorLayout.ts services/supabasePreStarts.ts services/preStartPdfRenderer.ts'''.split()
+files += ['utils/inspectionReportTitle.ts', 'utils/scaffoldFormDates.ts', 'services/scaffoldFormDates.ts']
 selected = set(sys.argv[3:]) if len(sys.argv) > 2 and sys.argv[2] == '--only' else set(files)
 manifest_path = dest / 'source-manifest.json'
 previous = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
@@ -40,6 +41,7 @@ for name in files:
     original = source / 'src' / name
     source_hashes[name] = hashlib.sha256(original.read_bytes()).hexdigest()
     content = original.read_text()
+    content = content.replace("from 'react-native-svg'", "from '../browser/svg'")
     content = content.replace("from 'react-native'", "from '../browser/runtime'")
     content = content.replace("from 'react-native-vector-icons/Feather'", "from '../browser/Feather'")
     content = content.replace("from 'react-native-safe-area-context'", "from '../browser/safeArea'")
@@ -75,11 +77,12 @@ for name in files:
         content = content.replace("sectionLocation: route.params.initialLocation ?? '',", "sectionLocation: '',")
         content = content.replace('    route.params.initialLocation,\n', '')
         # Linking is handled by the web register, not a button over the form reference row.
-        start = content.index('      {!isReadOnly && !isScaffTagLinked ? (')
+        start = content.index('      {!isReadOnly && !isInspectionReport && !isScaffTagLinked ? (')
         end = content.index('      {suggestedScaffTags.length > 0', start)
         content = content[:start] + content[end:]
         content = content.replace('  const isScaffTagLinked = Boolean(form.scaffTagFormId.trim());\n', '')
     if name == 'screens/ScaffTagFormScreen.tsx':
+        content = content.replace("import {pickInspectionTime} from '../native/inspectionTimePicker';", "const pickInspectionTime = async (_value: string): Promise<string | null> => null; // Web uses the inline time dialog.")
         content = content.replace('scrollEnabled={!usesIOSDocumentEditor}', 'scrollEnabled={true}')
         content = content.replace("import React from 'react';", "import React from 'react';\nimport {adaptScaffTagStyles} from '../browser/scaffTagStyles';")
         content = content.replace('return StyleSheet.create({', 'return StyleSheet.create(adaptScaffTagStyles({')

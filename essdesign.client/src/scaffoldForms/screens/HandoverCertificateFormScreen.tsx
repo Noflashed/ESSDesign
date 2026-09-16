@@ -31,6 +31,7 @@ import {useAuth} from '../context/AuthContext';
 import {BorderRadius, Colors, FontSize, Spacing, getTheme} from '../theme/appTheme';
 import AppTopBar from '../components/AppTopBar';
 import CompanyEntitySelector from '../components/CompanyEntitySelector';
+import ProjectDataDatePicker from '../components/ProjectDataDatePicker';
 import ProjectDataFormDemoModal from '../components/ProjectDataFormDemoModal';
 import ProjectDataFormShareModal, {
   ProjectDataShareSelection,
@@ -71,6 +72,8 @@ import {
 import {listScaffTagForms, ScaffTagListItem} from '../services/supabaseScaffTags';
 import {findScaffoldMatches} from '../utils/scaffoldRecordMatching';
 import {sydneyNowDisplayDateTime} from '../utils/sydneyTime';
+import {handoverDateWithCalendarDate} from '../utils/scaffoldFormDates';
+import {getLinkedScaffoldFormDate} from '../services/scaffoldFormDates';
 import {
   collectProjectDataRecipientEmails,
   projectDataPdfFileName,
@@ -439,6 +442,9 @@ function serializeFormState(form: FormState): string {
 }
 
 export default function HandoverCertificateFormScreen({navigation, route}: Props) {
+  const isInspectionReport = route.params.inspectionReport === true;
+  const documentName = isInspectionReport ? 'Inspection Report' : 'Handover Certificate';
+  const recordType = isInspectionReport ? 'inspection-reports' : 'handover-certificates';
   const prefs = usePreferences();
   const folders = useFolders();
   const {loadNotificationRecipients, notificationRecipients} = folders;
@@ -491,6 +497,8 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
   const [availableScaffTags, setAvailableScaffTags] = React.useState<ScaffTagListItem[]>([]);
   const [scaffTagLinkOwners, setScaffTagLinkOwners] = React.useState<Record<string, string>>({});
   const [showScaffTagPicker, setShowScaffTagPicker] = React.useState(false);
+  const [showInspectionDatePicker, setShowInspectionDatePicker] = React.useState(false);
+  const dateManuallySetRef = React.useRef(false);
   const [drawingRootFolders, setDrawingRootFolders] = React.useState<Folder[]>([]);
   const [drawingCurrentFolder, setDrawingCurrentFolder] = React.useState<Folder | null>(null);
   const [drawingBreadcrumbs, setDrawingBreadcrumbs] = React.useState<BreadcrumbItem[]>([]);
@@ -561,6 +569,23 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
   const isReadOnly = route.params.readOnly === true;
   const isScaffoldRegisterLinked = Boolean(scaffoldRegisterId.trim());
   const isDrawingLinked = Boolean(form.drawingDocumentId.trim());
+  React.useEffect(() => {
+    if (route.params.formId || createdAt || dateManuallySetRef.current) {
+      return;
+    }
+    let active = true;
+    const linkedDate = form.scaffTagFormId
+      ? getLinkedScaffoldFormDate('handover-certificates', route.params.builderId, route.params.projectId, form.scaffTagFormId)
+      : Promise.resolve(nowStamp());
+    linkedDate.then(date => {
+      if (active && !dateManuallySetRef.current) {
+        setForm(previous => ({...previous, inspectionDateTime: handoverDateWithCalendarDate(previous.inspectionDateTime, date)}));
+      }
+    }).catch(() => {
+      // Saving retries the lookup and reports failure rather than using a mismatched date.
+    });
+    return () => { active = false; };
+  }, [createdAt, form.scaffTagFormId, route.params.builderId, route.params.projectId, route.params.formId]);
   const currentSnapshot = React.useMemo(() => serializeFormState(form), [form]);
   const hasUnsavedChanges = !isReadOnly && baselineSnapshotRef.current !== null && (
     currentSnapshot !== baselineSnapshotRef.current || pendingPhotos.length > 0
@@ -684,6 +709,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
           route.params.builderId,
           route.params.projectId,
           route.params.formId as string,
+          isInspectionReport,
         );
         if (!existing || !isMounted) {
           return;
@@ -1392,10 +1418,11 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
         });
       }
 
-      const savedAt = nowStamp();
       const saved = await saveHandoverCertificateForm({
+        documentKind: isInspectionReport ? 'inspection-report' : undefined,
         id: nextId,
         createdAt,
+        dateManuallySet: dateManuallySetRef.current,
         builderId: route.params.builderId,
         builderName: route.params.builderName,
         projectId: route.params.projectId,
@@ -1404,7 +1431,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
         inspectionNumber: form.inspectionNumber.trim(),
         formReferenceName: form.formReferenceName.trim(),
         scaffoldRegisterId,
-        inspectionDateTime: savedAt,
+        inspectionDateTime: form.inspectionDateTime,
         projectNumberClient: form.projectNumberClient.trim(),
         sectionLocation: form.sectionLocation.trim(),
         intendedUse: form.intendedUse.trim(),
@@ -1471,6 +1498,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
         hrwLicenceNumber: saved.hrwLicenceNumber,
       };
       baselineSnapshotRef.current = serializeFormState(savedFormState);
+      dateManuallySetRef.current = false;
       setForm(savedFormState);
       setFormId(saved.id);
       setScaffoldRegisterId(saved.scaffoldRegisterId);
@@ -1509,6 +1537,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
         builderId: route.params.builderId,
         projectId: route.params.projectId,
         formId,
+        inspectionReport: isInspectionReport,
       });
       setSharePdfUrl(url);
       setShowShareModal(true);
@@ -1529,11 +1558,11 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
 
     setShareSending(true);
     try {
-      const formTitle = form.formReferenceName || form.inspectionNumber || 'Handover Certificate';
+      const formTitle = form.formReferenceName || form.inspectionNumber || documentName;
       await api.shareProjectDataForm({
         recipientUserIds: selection.internalRecipients.map(recipient => recipient.id),
         externalEmails: selection.externalEmails,
-        formType: 'Handover Certificate',
+        formType: documentName,
         formTitle,
         formNumber: form.inspectionNumber || inspectionNumberPreview,
         builderName: route.params.builderName,
@@ -1572,16 +1601,16 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
       return;
     }
 
-    const formTitle = form.formReferenceName || form.inspectionNumber || 'Handover Certificate';
+    const formTitle = form.formReferenceName || form.inspectionNumber || documentName;
     const formNumber = form.inspectionNumber || inspectionNumberPreview;
     setShareEmailingAttachment(true);
     try {
       const result = await composeEmailWithPdf({
         to: recipients,
         subject: `${formTitle} – ${formNumber}`,
-        body: `Please find attached the Handover Certificate PDF for ${route.params.projectName}.`,
+        body: `Please find attached the ${documentName} PDF for ${route.params.projectName}.`,
         pdfUrl: sharePdfUrl,
-        fileName: projectDataPdfFileName(`Handover Certificate ${formNumber}`),
+        fileName: projectDataPdfFileName(`${documentName} ${formNumber}`),
       });
       if (result !== 'cancelled') {
         setShowShareModal(false);
@@ -1736,7 +1765,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
           </View>
         </View>
         <View style={activeStyles.headerRight}>
-          <Text style={activeStyles.documentTitle}>{companyFormTitle(company.id, 'Handover Certificate')}</Text>
+          <Text style={activeStyles.documentTitle}>{companyFormTitle(company.id, documentName)}</Text>
           <View style={activeStyles.inspectionRow}>
             <Text style={activeStyles.inspectionLabel}>Inspection No.</Text>
             <TextInput
@@ -1763,16 +1792,26 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
             ]}>
               <Text style={activeStyles.tableLabel}>{field.label}</Text>
               <View style={activeStyles.referenceNameInputWrap}>
-                <TextInput
+                {field.key === 'inspectionDateTime' ? (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Change handover inspection date"
+                    disabled={isReadOnly || isStatic || saving}
+                    onPress={() => setShowInspectionDatePicker(true)}>
+                    <View pointerEvents="none">
+                      <TextInput style={activeStyles.tableInput} value={form.inspectionDateTime} editable={false} />
+                    </View>
+                  </TouchableOpacity>
+                ) : <TextInput
                   style={[activeStyles.tableInput, field.multiline ? activeStyles.tableInputMultiline : null]}
-                  editable={!isReadOnly && !isStatic && field.key !== 'inspectionDateTime'}
+                  editable={!isReadOnly && !isStatic}
                   selectTextOnFocus={!isStatic}
                   multiline={field.multiline}
                   value={form[field.key]}
                   onChangeText={value => updateField(field.key, value)}
                   placeholder={field.label}
                   placeholderTextColor={theme.textSecondary}
-                />
+                />}
                 {field.key === 'formReferenceName' && !isReadOnly && !isStatic ? (
                   <TouchableOpacity
                     style={activeStyles.referenceNameRegisterButton}
@@ -2322,6 +2361,22 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
           );
         }
 
+        if (field.key === 'inspectionDateTime') {
+          return (
+            <TouchableOpacity
+              key={`iphone-field-${field.key}`}
+              accessibilityRole="button"
+              accessibilityLabel="Change handover inspection date"
+              disabled={isReadOnly || saving}
+              style={[styles.iPhoneDateButton, phoneFormBoxStyle(field.box)]}
+              onPress={() => setShowInspectionDatePicker(true)}>
+              <View pointerEvents="none">
+                <TextInput style={styles.iPhoneDocumentInput} value={form.inspectionDateTime} editable={false} />
+              </View>
+            </TouchableOpacity>
+          );
+        }
+
         return (
           <TextInput
             key={`iphone-field-${field.key}`}
@@ -2335,8 +2390,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
             accessibilityLabel={field.label}
             editable={!isReadOnly
               && !isFieldLocked
-              && field.key !== 'inspectionNumber'
-              && field.key !== 'inspectionDateTime'}
+              && field.key !== 'inspectionNumber'}
             selectTextOnFocus
             keyboardType={field.keyboardType ?? 'default'}
             value={displayValue}
@@ -2674,6 +2728,9 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
             ? {uri: '/scaffold-forms/phone-page-1-maloo.png'}
             : {uri: '/scaffold-forms/phone-page-1.png'},
           <>
+            {isInspectionReport ? <View pointerEvents="none" style={[phoneFormBoxStyle({left: 530, top: 67, width: 210, height: 27}), {backgroundColor: '#FFFFFF', zIndex: 2, justifyContent: 'center', alignItems: 'flex-end'}]}>
+              <Text style={{color: '#111111', fontSize: 16, fontWeight: '700'}}>{companyFormTitle(company.id, documentName)}</Text>
+            </View> : null}
             <View
               pointerEvents="none"
               style={[
@@ -3039,11 +3096,23 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
             <React.Fragment key={`phone-detail-${field.key}`}>
               {field.key === 'formReferenceName'
                 ? renderPhoneReferenceNameField()
+                : field.key === 'inspectionDateTime'
+                ? (
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Change handover inspection date"
+                      disabled={isReadOnly || saving}
+                      onPress={() => setShowInspectionDatePicker(true)}>
+                      <View pointerEvents="none">
+                        {renderPhoneInput(field.label, form.inspectionDateTime, () => {}, {editable: false})}
+                      </View>
+                    </TouchableOpacity>
+                  )
                 : renderPhoneInput(
                     field.label,
                     form[field.key],
                     value => updateField(field.key, value),
-                    {multiline: field.multiline, editable: field.key !== 'inspectionDateTime'},
+                    {multiline: field.multiline},
                   )}
             </React.Fragment>
           ))}
@@ -3216,7 +3285,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
           centerContent={
             <CompanyEntitySelector
               entityId={form.companyEntityId}
-              formName="Handover Certificate"
+              formName={documentName}
               theme={theme}
               disabled={isReadOnly}
               onChange={entityId => {
@@ -3230,7 +3299,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
               hasUnsavedChanges ? (
                 <TouchableOpacity
                   accessibilityRole="button"
-                  accessibilityLabel="Save handover certificate"
+                  accessibilityLabel={isInspectionReport ? 'Save inspection report' : 'Save handover certificate'}
                   activeOpacity={0.86}
                   style={styles.iPhoneHeaderSaveButton}
                   disabled={saving}
@@ -3242,7 +3311,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
               ) : formId ? (
                 <TouchableOpacity
                   accessibilityRole="button"
-                  accessibilityLabel="Share handover certificate"
+                  accessibilityLabel={`Share ${documentName}`}
                   activeOpacity={0.86}
                   style={styles.iPhoneHeaderShareButton}
                   disabled={openingShare}
@@ -3302,6 +3371,18 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
         ) : renderPhoneForm()}
 
       </ScrollView>
+      <ProjectDataDatePicker
+        visible={showInspectionDatePicker && !isReadOnly && !saving}
+        value={form.inspectionDateTime}
+        onClose={() => setShowInspectionDatePicker(false)}
+        onChange={date => {
+          dateManuallySetRef.current = true;
+          setForm(previous => ({
+            ...previous,
+            inspectionDateTime: handoverDateWithCalendarDate(previous.inspectionDateTime, date, true),
+          }));
+        }}
+      />
       <SideMenuDrawer
         visible={showDrawer}
         onClose={() => setShowDrawer(false)}
@@ -3335,10 +3416,10 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
       />
 
       <ProjectDataFormShareModal
-        onBeforeShare={() => markSafetyFormShared('handover-certificates', route.params.builderId, route.params.projectId, formId!)}
+        onBeforeShare={() => markSafetyFormShared(recordType, route.params.builderId, route.params.projectId, formId!)}
         visible={showShareModal}
         theme={theme}
-        title={form.formReferenceName || form.inspectionNumber || 'Handover Certificate'}
+        title={form.formReferenceName || form.inspectionNumber || documentName}
         recipients={notificationRecipients}
         loadingRecipients={shareRecipientsLoading}
         sharing={shareSending}
@@ -3525,6 +3606,10 @@ function makeStyles(theme: ReturnType<typeof getTheme>, isWide: boolean) {
       paddingHorizontal: 4,
       paddingVertical: 0,
       includeFontPadding: false,
+    },
+    iPhoneDateButton: {
+      zIndex: 2,
+      justifyContent: 'center',
     },
     iPhoneLockedFieldText: {
       color: '#6B7280',

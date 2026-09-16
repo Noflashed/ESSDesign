@@ -1,6 +1,7 @@
-import {formatScaffoldDate, nextScaffoldInspectionDueDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/services/supabaseScaffTags.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {formatScaffoldDate, nextScaffoldInspectionDueDate} from '../utils/scaffoldFormDates';
 import {resolveScaffoldFormStatus, ScaffoldFormStatus} from '../utils/scaffoldFormStatus';
+import {resolveScaffoldFormDate, refreshLinkedScaffoldDateDocuments} from './scaffoldFormDates';
 import type {ScaffoldRegisterRecord} from './supabaseScaffoldRegister';
 import {AppConstants} from '../utils/constants';
 import api from './apiService';
@@ -29,6 +30,7 @@ export interface SignaturePoint {
 export type SignatureStroke = SignaturePoint[];
 
 export interface InspectionRecordEntry {
+  id?: string;
   date: string;
   time: string;
   competentPerson: string;
@@ -39,6 +41,7 @@ export interface InspectionRecordEntry {
 }
 
 export interface ScaffTagForm {
+  dateManuallySet?: boolean;
   completedAt?: string;
   completedByUserId?: string;
   id: string;
@@ -239,6 +242,7 @@ async function uploadObject(path: string, body: Blob | string, contentType: stri
       method: attempt.method,
       headers: {
         ...attempt.headers,
+        'cache-control': 'no-cache, max-age=0, must-revalidate',
         'Content-Type': contentType,
       },
       body,
@@ -801,6 +805,7 @@ export async function getScaffTagForm(
     checkOtherText: raw.checkOtherText ?? '',
     inspectionRecords: Array.isArray(raw.inspectionRecords)
       ? raw.inspectionRecords.map(row => ({
+          id: row?.id,
           date: row?.date ?? '',
           time: row?.time ?? '',
           competentPerson: row?.competentPerson ?? '',
@@ -849,16 +854,27 @@ export async function saveScaffTagForm(
   form: Omit<ScaffTagForm, 'id' | 'createdAt' | 'updatedAt' | 'sharePath' | 'pdfPath' | 'qrTargetUrl'> & {
     id?: string;
     createdAt?: string;
+    dateManuallySet?: boolean;
   },
 ): Promise<ScaffTagForm> {
-  const input = form;
+  const {dateManuallySet, ...input} = form;
   const formId = form.id ?? id();
   const existing = form.id ? await getScaffTagForm(form.builderId, form.projectId, formId) : null;
-  const createdAt = form.createdAt ?? nowIso();
+  const createdAt = existing?.createdAt ?? form.createdAt ?? nowIso();
   const updatedAt = nowIso();
   const savedAt = new Date(updatedAt);
   const sharePath = shareObjectPath(form.builderId, form.projectId, formId);
   const pdfPath = existing?.pdfPath ?? pdfObjectPath(form.builderId, form.projectId, formId);
+  const dateErected = await resolveScaffoldFormDate({
+    type: 'scaff-tags',
+    builderId: form.builderId,
+    projectId: form.projectId,
+    linkedFormId: form.handoverFormId,
+    value: form.dateErected,
+    existingValue: existing?.dateErected,
+    isNew: !existing,
+    dateManuallySet,
+  });
   // A compose-screen number is only accepted when it has already been reserved
   // through the allocator. Other callers still receive an authoritative number
   // here on first save; edits always retain the original number.
@@ -872,6 +888,7 @@ export async function saveScaffTagForm(
   const latestInspectionAt = latestInspectionRecord?.inspectedAt || existing?.latestInspectionAt || '';
   const baseForm: ScaffTagForm = {
     ...input,
+    dateManuallySet: dateManuallySet === true || existing?.dateManuallySet === true,
     completedAt: existing?.completedAt ?? input.completedAt,
     completedByUserId: existing?.completedByUserId ?? input.completedByUserId,
     id: formId,
@@ -879,6 +896,7 @@ export async function saveScaffTagForm(
     retiredAt: existing?.retiredAt ?? input.retiredAt ?? '',
     retiredReason: existing?.retiredReason ?? input.retiredReason ?? '',
     tagNumber,
+    dateErected,
     inspectionRecords,
     latestInspectionAt,
     photoPaths: (input.photoPaths ?? []).slice(0, SCAFF_TAG_PHOTO_LIMIT),
@@ -889,20 +907,15 @@ export async function saveScaffTagForm(
     sharePath,
   };
 
-  // Upload PDF first so signed URL generation does not fail with 404 on new forms.
-  await uploadObject(pdfPath, await buildRenderedScaffTagPdf(baseForm), 'application/pdf');
-
   const qrTargetUrl =
     (await getAssignedScaffTagQrLabel(form.builderId, form.projectId, formId).catch(() => null))?.publicUrl ?? '';
-  const nextForm: ScaffTagForm = {
+  let nextForm: ScaffTagForm = {
     ...baseForm,
     qrTargetUrl,
   };
 
   const latestInspectionDate = nextForm.latestInspectionAt || latestInspectionRecord?.date || '';
-  await Promise.all([
-    uploadObject(sharePath, renderScaffTagHtml(nextForm), 'text/html'),
-    upsertSafetyForm('scaff-tags', form.builderId, form.projectId, nextForm, {
+  const stored = await upsertSafetyForm('scaff-tags', form.builderId, form.projectId, nextForm, {
       title: nextForm.scaffoldNo,
       referenceNumber: nextForm.tagNumber,
       requestedBy: nextForm.inspectedBy,
@@ -911,8 +924,13 @@ export async function saveScaffTagForm(
       pdfPath,
       sharePath,
       photoPaths: nextForm.photoPaths,
-    }),
+    });
+  nextForm = {...nextForm, inspectionRecords: stored.inspectionRecords ?? nextForm.inspectionRecords, dateErected: stored.dateErected, dateManuallySet: stored.dateManuallySet, updatedAt: stored.updatedAt};
+  await Promise.all([
+    uploadObject(pdfPath, await buildRenderedScaffTagPdf(nextForm), 'application/pdf'),
+    uploadObject(sharePath, renderScaffTagHtml(nextForm), 'text/html'),
   ]);
+  await refreshLinkedScaffoldDateDocuments('scaff-tags', nextForm);
 
   const removedPhotoPaths = (existing?.photoPaths ?? []).filter(path => !nextForm.photoPaths.includes(path));
   await Promise.all(
@@ -926,6 +944,15 @@ export async function saveScaffTagForm(
   );
 
   return nextForm;
+}
+
+export async function refreshScaffTagDateDocuments(builderId: string, projectId: string, formId: string): Promise<void> {
+  const form = await getScaffTagForm(builderId, projectId, formId);
+  if (!form) { throw new Error('The linked Scaff-Tag could not be refreshed.'); }
+  await Promise.all([
+    uploadObject(form.pdfPath, await buildRenderedScaffTagPdf(form), 'application/pdf'),
+    uploadObject(form.sharePath || shareObjectPath(builderId, projectId, formId), renderScaffTagHtml(form), 'text/html'),
+  ]);
 }
 
 export async function setScaffTagScaffoldRecord(
@@ -974,11 +1001,13 @@ export async function setScaffTagScaffoldRecord(
 }
 
 export async function getScaffTagShareUrl(form: ScaffTagForm): Promise<string> {
-  return signedPathUrl(form.sharePath, 60 * 60 * 24 * 365);
+  const url = await signedPathUrl(form.sharePath, 60 * 60 * 24 * 365);
+  return `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(form.updatedAt)}`;
 }
 
 export async function getScaffTagPdfUrl(form: ScaffTagForm): Promise<string> {
-  return signedPathUrl(form.pdfPath, 60 * 60 * 24 * 14);
+  const url = await signedPathUrl(form.pdfPath, 60 * 60 * 24 * 14);
+  return `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(form.updatedAt)}`;
 }
 
 async function removeObject(path: string): Promise<void> {

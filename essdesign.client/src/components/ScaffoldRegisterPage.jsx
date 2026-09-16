@@ -1,3 +1,4 @@
+import MonthlyInspectionReports from './MonthlyInspectionReports';
 import {formatScaffoldDate, nextScaffoldInspectionDueDate, scaffoldInspectionCountdown} from '../scaffoldForms/utils/scaffoldDateDisplay';
 import { makeRegisterItems, resolveScaffoldLifecycle, formatElapsedTime } from '../utils/scaffoldRegister';
 import {ALL_SCOPE, ALL_BUILDERS, projectScopeOptions, resolveProjectScope} from '../utils/projectDataScope';
@@ -257,6 +258,8 @@ export default function ScaffoldRegisterPage({
     const [designItem, setDesignItem] = useState(null);
     const [editor, setEditor] = useState(null);
     const [expandedCard, setExpandedCard] = useState(null);
+    const [reportsItem, setReportsItem] = useState(null);
+    useEffect(() => { setReportsItem(null); }, [selectedBuilderId, selectedProjectId]);
     const promotedRecords = useRef(new Map());
     const nameDialog = useRef(null);
 
@@ -727,6 +730,9 @@ export default function ScaffoldRegisterPage({
                                                 <LinkedDocumentButton title={tagNumber || 'Scaff-Tag'} linked={Boolean(item.tag)} opening={mutationBusy} onClick={() => openFormEditor('tag', item)} />
                                                 {!item.tag && lifecycle.status !== 'dismantled' && addAction(`Create Scaff-Tag for ${item.scaffoldName}`, () => openFormEditor('tag', item))}
                                             </div>
+                                            <button type="button" className="monthly-reports-link" onClick={() => setReportsItem(item)}>
+                                                <FileText size={16} /><span>Monthly Inspection Reports</span><span aria-hidden="true">›</span>
+                                            </button>
                                         </div>
 
                                         <time className="scaffold-card-updated" dateTime={item.updatedAt}>Updated {formatUpdatedAt(item.updatedAt)}</time>
@@ -803,7 +809,8 @@ export default function ScaffoldRegisterPage({
             {error ? <div className="scaffold-register-error" role="alert">{error}</div> : null}
 
             <section inert={editor ? "" : undefined} aria-hidden={Boolean(editor)} className={`scaffold-register-cards-wrap${recordsLoading || buildersLoading ? ' is-loading' : ''}`}>
-                {recordsLoading || buildersLoading ? (
+                {reportsItem ? <MonthlyInspectionReports item={reportsItem} revision={Boolean(editor)}
+                    onBack={() => setReportsItem(null)} onOpen={report => setEditor({screen:'HandoverCertificateForm', params:{...paramsForItem(reportsItem), formId:report.id, inspectionReport:true}})} /> : recordsLoading || buildersLoading ? (
                     <div className="scaffold-register-loading page-loading-brandmark"><LoadingBrandmark label="Loading Scaffold Register" /></div>
                 ) : !selectedProject ? (
                     <div className="scaffold-register-empty">

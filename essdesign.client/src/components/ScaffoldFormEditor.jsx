@@ -22,7 +22,7 @@ export default function ScaffoldFormEditor({screen, params, onClose, onSaved}) {
         },
         reset: onClose,
     }), [stack.length, onClose, onSaved]);
-    return <div className="scaffold-form-editor" role="dialog" aria-modal="true" aria-label={current.screen === 'PreStartForm' ? 'Pre-Start form' : current.screen === 'DayLabourVariationForm' ? 'Day Labour form' : current.screen === 'ScaffTagForm' ? 'Scaff-Tag form' : 'Handover Certificate form'}>
+    return <div className="scaffold-form-editor" role="dialog" aria-modal="true" aria-label={current.params.inspectionReport ? 'Inspection Report form' : current.screen === 'PreStartForm' ? 'Pre-Start form' : current.screen === 'DayLabourVariationForm' ? 'Day Labour form' : current.screen === 'ScaffTagForm' ? 'Scaff-Tag form' : 'Handover Certificate form'}>
         {stack.map((entry, index) => {
             const EntryScreen = entry.screen === 'PreStartForm' ? PreStartFormScreen : entry.screen === 'DayLabourVariationForm' ? DayLabourVariationFormScreen : entry.screen === 'HandoverCertificateForm' ? HandoverCertificateFormScreen : ScaffTagFormScreen;
             return <div className="scaffold-form-editor-screen" key={index} style={{display: index === stack.length - 1 ? 'flex' : 'none'}}>

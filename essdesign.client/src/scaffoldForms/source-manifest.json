@@ -36,11 +36,14 @@
     "models/preStartDocument.ts",
     "models/preStartEditorLayout.ts",
     "services/supabasePreStarts.ts",
-    "services/preStartPdfRenderer.ts"
+    "services/preStartPdfRenderer.ts",
+    "utils/inspectionReportTitle.ts",
+    "utils/scaffoldFormDates.ts",
+    "services/scaffoldFormDates.ts"
   ],
   "sha256": {
-    "screens/HandoverCertificateFormScreen.tsx": "8ad15d545f6da2302aa38e6eff9db8f32aaee6d848b6ba4940eafc4440864b45",
-    "screens/ScaffTagFormScreen.tsx": "b090af7723bf4930451813b60f7ca63d235180b9652042df5e79abddb4451321",
+    "screens/HandoverCertificateFormScreen.tsx": "fa3cf06e31b0425223f93c6c6b952a2034daa2e2f6f77c5ee4b7403846170677",
+    "screens/ScaffTagFormScreen.tsx": "3d01ad869f341f134136f3e7ecdbdd790cc576617cd82a41058383ad9410c67b",
     "components/AppTopBar.tsx": "1db0ccbb0f3db7f5653d1345143707271857c0f37aca0d61f3b818e72b742123",
     "components/CompanyEntitySelector.tsx": "370dd3c1ef50972fd7617b5a0a570d6c6a8aa625d116e0644f8e88607254d631",
     "components/SignaturePadModal.tsx": "de798181418834bf5de0f1b21ba66e2a3d125759b40a6aba1ca327ec82b6325c",
@@ -48,10 +51,10 @@
     "components/ProjectDataFormShareModal.tsx": "d40820d1776607404bf97fae73d30278d31ccd2e3b4a142c82d13f5c3c4e38d7",
     "components/ScaffoldRecordLinkControls.tsx": "4b816f471289475dbbd795d98ca7cb172dd018bcd36f04657247606dd02354a1",
     "components/DrawingRegisterPickerModal.tsx": "951d3797376774eb7fe9bf2a3d09a397e9306d317a01f38e7c9dab25e893d185",
-    "services/supabaseHandoverCertificates.ts": "91679c9a6919eba47c97621564d213a37bf94a2ffe28866f7be51df48bd1e6a8",
-    "services/supabaseScaffTags.ts": "63b904f7e0fd27ec78d32a5a9c8b0e53fbd69cf99764c860d6045d590f63cee0",
+    "services/supabaseHandoverCertificates.ts": "41497853728b3ef85c29018e9d188393e11019f0376421a74c18070684bb4d0e",
+    "services/supabaseScaffTags.ts": "1ecdc3665b366f101cd216e4badf8dab92600fb244ba9437739be4d63cd9cca2",
     "services/scaffTagPdfRenderer.ts": "a20fe4023ce020b17f3c32b0dbfeaba4bcba410493c6569a216ce41640e5a06b",
-    "services/supabaseSafetyRecords.ts": "a8abe209f051cec8203e35afda113dc5d26999d24e3b08eeb4f35fc4ea09b227",
+    "services/supabaseSafetyRecords.ts": "91d9982304f25b5b933dcf20fadc6a819e49b9ea641d299462e41cabc9af3214",
     "services/supabaseScaffTagQrLabels.ts": "c37d70bffb82a3b90c7657e02593294cb52a668dc7af20d1a4515cee876bbe39",
     "services/supabaseScaffoldRegister.ts": "d91aff3bf904ab26ecf2c8349e13cd1dafab3a23a4e500ebe0dda730a952aedd",
     "services/supabaseDayLabourForms.ts": "71eebceb1af1ed6b126be2d77bb224fd2d5dc54d8ffafaf12b7dba09170b5b2a",
@@ -75,7 +78,10 @@
     "models/preStartEditorLayout.ts": "adc04cd55511c58cec9bcf46bed7143b7f6a3c956c186e84987f52383e4ca898",
     "services/supabasePreStarts.ts": "012f745cd80d193ec798a6d7f0f19fc773f7d3047b82b863ec342e310d14a1d2",
     "services/preStartPdfRenderer.ts": "46306a822bc23e4a1cba0d1e7850c61531bb1ee278d548e88225fed012550726",
-    "utils/scaffoldFormStatus.ts": "9e7bdb9b372531ad8fa82d96525b5252c46df0e63791695eb2f4d3b039ab1345"
+    "utils/scaffoldFormStatus.ts": "9e7bdb9b372531ad8fa82d96525b5252c46df0e63791695eb2f4d3b039ab1345",
+    "utils/inspectionReportTitle.ts": "de7bed8217c1ca0ca6ec972c76dcc78fbceacee911e6789ed15bd0914f884bbe",
+    "utils/scaffoldFormDates.ts": "48c480408f24805e0360ed4a7791c1c4b9c5d000cdbb608137dc85684c552a64",
+    "services/scaffoldFormDates.ts": "b5807161ba3463bcfc0dc9f5a5997255ba8125fb75eae1f90c905fb1d856c3df"
   },
   "assets": {
     "src/assets/handover/phone-page-1-maloo.png": "scaffold-forms/phone-page-1-maloo.png",

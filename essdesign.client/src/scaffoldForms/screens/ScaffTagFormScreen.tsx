@@ -1,8 +1,8 @@
+// Derived from ESSApp/src/screens/ScaffTagFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
 import Svg, {Polyline} from '../browser/svg';
 import ScaffTagTableScroll from '../components/ScaffTagTableScroll';
 import {inspectionTableRows, complianceTableRows, previousInspectionSignature, removeInspectionRow} from '../utils/scaffTagInspectionRows';
-import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
-// Derived from ESSApp/src/screens/ScaffTagFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {formatScaffoldDate} from '../utils/scaffoldFormDates';
 import React from 'react';
 import {adaptScaffTagStyles} from '../browser/scaffTagStyles';
 import {
@@ -35,6 +35,7 @@ import CompanyEntitySelector from '../components/CompanyEntitySelector';
 import SignaturePadModal, {SignaturePadStroke} from '../components/SignaturePadModal';
 import SideMenuDrawer from '../components/SideMenuDrawer';
 import {pickFormImage} from '../native/profileImagePicker';
+const pickInspectionTime = async (_value: string): Promise<string | null> => null; // Web uses the inline time dialog.
 import {getSafetyBuilders} from '../services/supabaseSafetyProjects';
 import {
   CompanyEntityId,
@@ -57,6 +58,7 @@ import {
 import {setHandoverCertificateScaffTagLink} from '../services/supabaseHandoverCertificates';
 import {assignScaffTagQrLabel} from '../services/supabaseScaffTagQrLabels';
 import {activateScaffoldRegisterRecordById} from '../services/supabaseScaffoldRegister';
+import {getLinkedScaffoldFormDate} from '../services/scaffoldFormDates';
 import {SYDNEY_TIME_ZONE, getSydneyDateTimeParts, sydneyCalendarDate, sydneyTodayIsoDate} from '../utils/sydneyTime';
 
 type Props = {
@@ -157,6 +159,9 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
     back: IOS_TAG_PAGE_FALLBACK_HEIGHT,
   });
   const [showDatePicker, setShowDatePicker] = React.useState(false);
+  const [timeTarget, setTimeTarget] = React.useState<number | null>(null);
+  const [inspectionTimeDraft, setInspectionTimeDraft] = React.useState('');
+  const [inspectionTimeError, setInspectionTimeError] = React.useState('');
   const [showSignatureModal, setShowSignatureModal] = React.useState(false);
   const [dateTarget, setDateTarget] = React.useState<{
     type: 'dateErected' | 'inspection';
@@ -181,6 +186,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
   const backCardRef = React.useRef<View>(null);
   const initialHandoverFormIdRef = React.useRef(route.params.initialHandoverFormId ?? '');
   const companySelectionTouchedRef = React.useRef(false);
+  const dateManuallySetRef = React.useRef(false);
   const [form, setForm] = React.useState<FormState>({
     companyEntityId: route.params.initialCompanyEntityId ?? DEFAULT_COMPANY_ENTITY_ID,
     tagNumber: '',
@@ -229,6 +235,23 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
   const isScaffoldRegisterLinked = Boolean(scaffoldRegisterId.trim());
   const company = getCompanyEntity(form.companyEntityId);
   const inputEditableProps = isReadOnly ? {editable: false, selectTextOnFocus: false} : {};
+  React.useEffect(() => {
+    if (route.params.formId || createdAt || dateManuallySetRef.current) {
+      return;
+    }
+    let active = true;
+    const linkedDate = form.handoverFormId
+      ? getLinkedScaffoldFormDate('scaff-tags', route.params.builderId, route.params.projectId, form.handoverFormId)
+      : Promise.resolve(sydneyTodayIsoDate());
+    linkedDate.then(date => {
+      if (active && !dateManuallySetRef.current) {
+        setForm(previous => ({...previous, dateErected: date}));
+      }
+    }).catch(() => {
+      // Saving retries the lookup and reports failure rather than using a mismatched date.
+    });
+    return () => { active = false; };
+  }, [createdAt, form.handoverFormId, route.params.builderId, route.params.projectId, route.params.formId]);
   const goDesignRoot = () => {
     folders.goToRoot();
     folders.clearSearch();
@@ -592,6 +615,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
       return;
     }
     if (dateTarget.type === 'dateErected') {
+      dateManuallySetRef.current = true;
       setForm(prev => ({...prev, dateErected: isoDate}));
     } else if (dateTarget.type === 'inspection' && typeof dateTarget.index === 'number') {
       setInspectionRow(dateTarget.index, 'date', isoDate);
@@ -710,6 +734,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
       const saved = await saveScaffTagForm({
         id: nextId,
         createdAt,
+        dateManuallySet: dateManuallySetRef.current,
         builderId: route.params.builderId,
         builderName: route.params.builderName,
         projectId: route.params.projectId,
@@ -762,13 +787,16 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
         );
       }
       initialHandoverFormIdRef.current = saved.handoverFormId;
+      dateManuallySetRef.current = false;
 
       setFormId(saved.id);
       setScaffoldRegisterId(saved.scaffoldRegisterId);
       setCreatedAt(saved.createdAt);
       setForm(previous => ({
         ...previous,
+        inspectionRecords: saved.inspectionRecords,
         tagNumber: saved.tagNumber,
+        dateErected: saved.dateErected,
         handoverFormId: saved.handoverFormId,
         handoverInspectionNumber: saved.handoverInspectionNumber,
         handoverReferenceName: saved.handoverReferenceName,
@@ -1205,13 +1233,42 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                             >
                               <Feather name="plus" size={18} color="#FFFFFF" />
                             </TouchableOpacity>
+                          ) : row.date && !isReadOnly ? (
+                            <TouchableOpacity
+                              accessibilityRole="button"
+                              accessibilityLabel={`Change inspection ${index + 1} date, ${formatScaffoldDate(row.date)}`}
+                              accessibilityHint="Tap to change the date."
+                              style={styles.inspectionDateButton}
+                              onPress={() => openDatePicker({type: 'inspection', index}, row.date)}
+                            >
+                              <Text style={styles.authCellText}>{formatScaffoldDate(row.date)}</Text>
+                            </TouchableOpacity>
                           ) : (
                             <Text style={styles.authCellText}>{formatScaffoldDate(row.date || '')}</Text>
                           )}
                         </View>
-                        <View style={[styles.authInput, styles.authTimeCell, styles.authTimeValueCell]}>
+                        <TouchableOpacity
+                          accessibilityRole="button"
+                          accessibilityLabel={`Change inspection ${index + 1} time, ${row.time || 'not set'}`}
+                          disabled={isReadOnly || !isActive}
+                          activeOpacity={isReadOnly || !isActive ? 1 : 0.85}
+                          onPress={async () => {
+                            if (Platform.OS === 'ios') {
+                              try {
+                                const time = await pickInspectionTime(row.time || '');
+                                if (time !== null) { setInspectionRow(index, 'time', time); }
+                              } catch (error) {
+                                Alert.alert('Inspection time', error instanceof Error ? error.message : 'Could not open the time selector.');
+                              }
+                              return;
+                            }
+                            setInspectionTimeDraft(row.time || '');
+                            setInspectionTimeError('');
+                            setTimeTarget(index);
+                          }}
+                          style={[styles.authInput, styles.authTimeCell, styles.authTimeValueCell]}>
                           <Text style={styles.authCellText}>{row.time || ''}</Text>
-                        </View>
+                        </TouchableOpacity>
                         <TextInput
                           style={[styles.authInput, styles.authNameCell]}
                           editable={!isReadOnly && isActive}
@@ -1332,11 +1389,14 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                   </View>
                   <TouchableOpacity
                     style={styles.reverseDetailRow}
-                    disabled={isReadOnly}
+                    accessibilityRole="button"
+                    accessibilityLabel="Change Scaff-Tag date"
+                    disabled={isReadOnly || saving}
                     onPress={() => openDatePicker({type: 'dateErected'}, form.dateErected)}
                   >
                     <Text style={styles.reverseDetailLabel}>DATE:</Text>
                     <Text style={styles.reverseDetailText}>{formatScaffoldDate(form.dateErected || '')}</Text>
+                    {!isReadOnly ? <Feather name="calendar" size={14} color="#0B7F45" /> : null}
                   </TouchableOpacity>
                   <View style={styles.reverseDetailRow}>
                     <Text style={styles.reverseDetailLabel}>INSPECTED BY:</Text>
@@ -1445,6 +1505,52 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
         onGoNotifications={() => navigation.navigate('Notifications')}
         onGoSettings={() => navigation.navigate('Settings')}
       />
+
+      <Modal visible={timeTarget !== null} transparent animationType="fade" onRequestClose={() => setTimeTarget(null)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setTimeTarget(null)}>
+          <Pressable style={styles.calendarCard}>
+            <Text style={styles.calendarTitle}>Inspection time</Text>
+            <Text style={styles.inspectionTimeHelp}>Enter a time such as 9:30 am or 14:30.</Text>
+            <TextInput
+              accessibilityLabel="Inspection time"
+              style={styles.inspectionTimeInput}
+              value={inspectionTimeDraft}
+              onChangeText={value => {
+                setInspectionTimeDraft(value);
+                setInspectionTimeError('');
+              }}
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect={false}
+              selectTextOnFocus
+              placeholder="9:30 am"
+              placeholderTextColor="#64748B"
+            />
+            {inspectionTimeError ? <Text accessibilityRole="alert" style={styles.inspectionTimeError}>{inspectionTimeError}</Text> : null}
+            <View style={styles.inspectionTimeActions}>
+              <TouchableOpacity accessibilityRole="button" onPress={() => setTimeTarget(null)} style={styles.inspectionTimeAction}>
+                <Text style={styles.inspectionTimeActionText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" style={styles.inspectionTimeAction} onPress={() => {
+                if (isReadOnly || timeTarget === null) { return; }
+                const match = inspectionTimeDraft.trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
+                const hour = Number(match?.[1]);
+                const minute = Number(match?.[2]);
+                const period = match?.[3]?.toLowerCase();
+                if (!match || minute > 59 || (period ? hour < 1 || hour > 12 : hour > 23)) {
+                  setInspectionTimeError('Enter a valid time, such as 9:30 am or 14:30.');
+                  return;
+                }
+                const displayTime = `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${period || (hour >= 12 ? 'pm' : 'am')}`;
+                setInspectionRow(timeTarget, 'time', displayTime);
+                setTimeTarget(null);
+              }}>
+                <Text style={styles.inspectionTimeActionText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={inspectionToDelete !== null} transparent animationType="fade" onRequestClose={() => setInspectionToDelete(null)}>
         <Pressable style={styles.deleteInspectionOverlay} onPress={() => setInspectionToDelete(null)}>
@@ -1918,6 +2024,38 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       borderRightColor: '#8DA9BE',
       justifyContent: 'center',
       paddingHorizontal: 4,
+    },
+    inspectionTimeHelp: {
+      color: '#475569',
+      marginVertical: 12,
+    },
+    inspectionTimeInput: {
+      borderWidth: 1,
+      borderColor: '#8DA9BE',
+      borderRadius: 8,
+      padding: 12,
+      color: '#111827',
+      fontSize: 18,
+    },
+    inspectionTimeError: {
+      color: '#B91C1C',
+      marginTop: 8,
+    },
+    inspectionTimeActions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      marginTop: 12,
+    },
+    inspectionTimeAction: {
+      padding: 12,
+    },
+    inspectionTimeActionText: {
+      color: '#0B7F45',
+      fontWeight: '700',
+    },
+    inspectionDateButton: {
+      flex: 1,
+      justifyContent: 'center',
     },
     editableFrontPage: {paddingLeft: 42},
     latestInspectionDelete: {
