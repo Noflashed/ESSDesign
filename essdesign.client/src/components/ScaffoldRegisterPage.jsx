@@ -640,14 +640,6 @@ export default function ScaffoldRegisterPage({
 
     return (
         <main className="scaffold-register-page">
-            <header className="scaffold-register-heading" inert={editor ? "" : undefined}>
-                <div><h1>Scaffold Register</h1><p>Scaffold status, inspections and linked documents</p></div>
-                <button type="button" className="scaffold-register-add" disabled={mutationBusy || !hasSpecificSite}
-                    title={hasSpecificSite ? 'Add scaffold' : 'Select a specific site to add a scaffold'}
-                    onClick={() => {setScaffoldName(''); setNameError(''); setNameDialogOpen(true);}}>
-                    <Plus size={18} aria-hidden="true" /><span>Add scaffold</span>
-                </button>
-            </header>
             <section className="scaffold-register-toolbar" inert={editor ? "" : undefined} aria-hidden={Boolean(editor)} aria-label="Scaffold Register filters">
                 <div className="scaffold-register-dropdowns">
                     <RegisterDropdown
@@ -696,6 +688,14 @@ export default function ScaffoldRegisterPage({
                     </button>
                 </div>
             </section>
+
+            <div className="scaffold-register-action-bar" inert={editor ? "" : undefined}>
+                <button type="button" className="scaffold-register-add" disabled={mutationBusy || !hasSpecificSite}
+                    title={hasSpecificSite ? 'Add scaffold' : 'Select a specific site to add a scaffold'}
+                    onClick={() => {setScaffoldName(''); setNameError(''); setNameDialogOpen(true);}}>
+                    <Plus size={18} aria-hidden="true" /><span>Add scaffold</span>
+                </button>
+            </div>
 
             {error ? <div className="scaffold-register-error" role="alert">{error}</div> : null}
 

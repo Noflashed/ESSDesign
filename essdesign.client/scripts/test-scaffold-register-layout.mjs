@@ -31,11 +31,11 @@ async function load() {
     await page.goto(`${baseURL}/tests/fixtures/scaffold-register.html`);
     await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
     await page.addStyleTag({ content: '#root { height: 100vh; } @media(min-width: 701px) { #root { margin-left:236px; } }' });
-    await page.locator('.scaffold-register-heading .scaffold-register-add').waitFor();
+    await page.locator('.scaffold-register-action-bar .scaffold-register-add').waitFor();
 }
 
 async function checkAdd() {
-    const add = page.locator('.scaffold-register-heading .scaffold-register-add');
+    const add = page.locator('.scaffold-register-action-bar .scaffold-register-add');
     const rect = await add.boundingBox();
     const viewport = page.viewportSize();
     assert.ok(rect.x >= 0 && rect.x + rect.width <= viewport.width);

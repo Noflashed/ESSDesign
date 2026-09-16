@@ -750,12 +750,10 @@
 .scaffold-register-inspection-reminder.is-overdue { color: #a66b36; }
 
 /* Card register: document actions stay attached to their scaffold. */
-.scaffold-register-page { background: var(--bg-secondary, #f4f6f8); gap: 24px; padding: 28px; }
-.scaffold-register-heading { display:flex; justify-content:space-between; align-items:center; gap:20px; flex-shrink:0; }
-.scaffold-register-heading h1 { margin:0; font-size:30px; font-weight:750; letter-spacing:-.8px; color:var(--text-primary, #12283f); }
-.scaffold-register-heading p { margin:7px 0 0; color:var(--text-secondary, #64748b); font-size:14px; }
-.scaffold-register-heading .scaffold-register-add { display:flex; gap:8px; align-items:center; padding:12px 18px; border:0; border-radius:9px; background:#142d46; color:#fff; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap; }
-.scaffold-register-heading .scaffold-register-add:disabled { opacity:.45; cursor:not-allowed; }
+.scaffold-register-page { background: #fff; gap: 24px; padding: 28px; }
+.scaffold-register-action-bar { display:flex; justify-content:flex-end; align-items:center; gap:20px; flex-shrink:0; }
+.scaffold-register-action-bar .scaffold-register-add { display:flex; gap:8px; align-items:center; padding:12px 18px; border:0; border-radius:9px; background:#142d46; color:#fff; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.scaffold-register-action-bar .scaffold-register-add:disabled { opacity:.45; cursor:not-allowed; }
 .scaffold-register-cards-wrap { min-height:0; overflow:auto; flex:1; padding:0 4px 12px 0; }
 .scaffold-register-tabs { display:flex; gap:12px; margin-bottom:22px; }
 .scaffold-register-tabs button { display:flex; gap:9px; align-items:center; padding:10px 14px; border:0; border-bottom:2px solid transparent; border-radius:8px 8px 0 0; color:var(--text-secondary,#64748b); background:transparent; font:inherit; font-size:13px; cursor:pointer; white-space:nowrap; }
@@ -789,7 +787,7 @@
 .scaffold-register-card-grid:has(.scaffold-register-card:only-child) { grid-template-columns:minmax(0,440px); }
 @media (min-width:1500px) { .scaffold-register-card-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:1100px) { .scaffold-register-toolbar { flex-wrap:wrap; } .scaffold-register-dropdowns { flex:1; } .scaffold-register-toolbar-actions { flex:1; } }
-@media (max-width:700px) { .scaffold-register-page { padding:16px; gap:18px; } .scaffold-register-heading { align-items:flex-start; } .scaffold-register-heading h1 { font-size:23px; } .scaffold-register-heading p { font-size:12px; } .scaffold-register-heading .scaffold-register-add { padding:10px; font-size:12px; } .scaffold-register-tabs { gap:0; overflow:auto; } .scaffold-register-tabs button { padding:10px 8px; gap:5px; font-size:12px; } .scaffold-register-card-grid { grid-template-columns:minmax(0,1fr); } .scaffold-register-toolbar .scaffold-register-dropdown { width:100%; min-width:0; } .scaffold-register-dropdowns { flex-direction:column; width:100%; } .scaffold-register-toolbar-actions { width:100%; } }
+@media (max-width:700px) { .scaffold-register-page { padding:16px; gap:18px; } .scaffold-register-action-bar { align-items:flex-start; } .scaffold-register-action-bar .scaffold-register-add { padding:10px; font-size:12px; } .scaffold-register-tabs { gap:0; overflow:auto; } .scaffold-register-tabs button { padding:10px 8px; gap:5px; font-size:12px; } .scaffold-register-card-grid { grid-template-columns:minmax(0,1fr); } .scaffold-register-toolbar .scaffold-register-dropdown { width:100%; min-width:0; } .scaffold-register-dropdowns { flex-direction:column; width:100%; } .scaffold-register-toolbar-actions { width:100%; } }
 .scaffold-card-qr { display:flex; flex-direction:column; align-items:center; gap:3px; width:64px; flex-shrink:0; color:#1764d5; text-decoration:none; font-size:10px; font-weight:600; border-radius:6px; }
 .scaffold-card-qr img { width:64px; height:64px; display:block; border:1px solid var(--border-color,#dfe6ee); border-radius:5px; background:white; }
 .scaffold-card-qr:hover img { border-color:#1764d5; box-shadow:0 0 0 2px #1764d522; }
@@ -809,3 +807,4 @@
 .scaffold-card-document .scaffold-register-document-link { grid-column:4; grid-row:1; max-width:100%; width:100%; text-align:left; }
 .scaffold-card-documents { display:grid; grid-template-columns:16px max-content 24px minmax(0,1fr); column-gap:9px; }
 .scaffold-card-document { grid-column:1 / -1; grid-template-columns:subgrid; }
+:root[data-theme="dark"] .scaffold-register-page { background:var(--bg-primary); }
