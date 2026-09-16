@@ -1,0 +1,5 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sample linked Scaff-Tag</title>
+<style>body{font:16px system-ui;background:#f4f6f8;color:#142b45;margin:0;padding:32px}main{max-width:620px;margin:auto;background:white;border:1px solid #dfe6ee;border-radius:14px;padding:28px}small{color:#647792}h1{margin-bottom:4px}dt{color:#647792;margin-top:20px}dd{margin:4px 0}a{color:#1764d5}</style>
+<main><small>LOCAL PREVIEW · SAMPLE DATA</small><h1>Scaff-Tag</h1><p id="label"></p><dl><dt>Scaffold</dt><dd id="name"></dd><dt>Client</dt><dd>ABI Civil Contracting</dd><dt>Location</dt><dd>Burwood North Station</dd><dt>Compliance note</dt><dd>Scaffold compliant</dd></dl><p>This is a sample linked QR webpage. Live scaffold cards open their assigned QR label’s webpage.</p></main>
+<script>const params=new URLSearchParams(location.search);document.getElementById('name').textContent=params.get('name')||'Sample Scaffold';document.getElementById('label').textContent=params.get('label')||'ST0001';</script></html>

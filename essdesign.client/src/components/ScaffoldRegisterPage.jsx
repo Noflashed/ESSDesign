@@ -1,15 +1,20 @@
-import {nextScaffoldInspectionDueDate, scaffoldInspectionCountdown} from '../scaffoldForms/utils/scaffoldDateDisplay';
+import {formatScaffoldDate, nextScaffoldInspectionDueDate, scaffoldInspectionCountdown} from '../scaffoldForms/utils/scaffoldDateDisplay';
 import { makeRegisterItems, resolveScaffoldLifecycle, formatElapsedTime } from '../utils/scaffoldRegister';
 import {ALL_SCOPE, ALL_BUILDERS, projectScopeOptions, resolveProjectScope} from '../utils/projectDataScope';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
     ChevronDown,
+    FileText,
+    Tag,
+    QrCode,
+    MoreVertical,
     Clock3,
     HardHat,
     ListTree,
     Link2,
     Plus,
+    CirclePlus,
     RefreshCw,
     Search,
     Trash2
@@ -30,6 +35,7 @@ import {listDayLabourVariationForms, setDayLabourVariationDrawingLink} from '../
 import {setScaffTagScaffoldRecord} from '../scaffoldForms/services/supabaseScaffTags';
 import LoadingBrandmark from './LoadingBrandmark';
 import './ScaffoldRegisterPage.css';
+import QRCode from 'qrcode';
 
 const AUTO_REFRESH_MS = 30_000;
 const FILTER_STORAGE_KEY = 'ess-scaffold-register-filters-v1';
@@ -45,6 +51,22 @@ function readStoredFilters() {
     } catch {
         return { builderId: '', projectId: '', query: '' };
     }
+}
+
+function ScaffoldQrThumbnail({url, number, scaffoldName}) {
+    const [image, setImage] = useState('');
+    useEffect(() => {
+        let active = true;
+        setImage('');
+        if (url) QRCode.toDataURL(url, {width: 160, margin: 2, errorCorrectionLevel: 'M'})
+            .then(value => { if (active) setImage(value); })
+            .catch(() => { if (active) setImage(''); });
+        return () => { active = false; };
+    }, [url]);
+    const content = <>{image ? <img src={image} alt="" /> : <QrCode size={42} aria-hidden="true" />}<span>{number || (url ? 'View QR' : 'No QR')}</span></>;
+    return url ? <a className="scaffold-card-qr" href={url}
+        aria-label={`Open QR webpage for ${scaffoldName}`} title={`Open ${number || 'linked QR webpage'}`}>{content}</a>
+        : <span className="scaffold-card-qr is-unassigned" title="No QR label assigned">{content}</span>;
 }
 
 function prefixedNumber(prefix, value) {
@@ -175,7 +197,7 @@ export function RegisterDropdown({ label, selectedItem, items, getLabel, getLogo
 
 function LinkedDocumentButton({ title, linked, opening, onClick }) {
     if (!linked) {
-        return <span className="scaffold-register-missing-link">Not linked</span>;
+        return null;
     }
 
     return (
@@ -286,9 +308,7 @@ export default function ScaffoldRegisterPage({
     const scopeProjects = useMemo(() => projects.filter(project => !project.isAll
         && (selectedProject?.isAll || project.id === selectedProject?.id)), [projects, selectedProject]);
     const hasSpecificSite = Boolean(selectedProject && !selectedProject.isAll);
-    const showSiteColumn = !hasSpecificSite;
-    const showBuilderColumn = showSiteColumn && selectedBuilderId === ALL_SCOPE;
-    const contextColumnCount = Number(showSiteColumn) + Number(showBuilderColumn);
+    const [statusFilter, setStatusFilter] = useState('all');
     const paramsForProject = project => ({
         builderId: project?.builderId || '',
         builderName: builders.find(builder => builder.id === project?.builderId)?.name || '',
@@ -586,8 +606,8 @@ export default function ScaffoldRegisterPage({
         } finally { mutationLock.current = false; setMutationBusy(false); }
     };
 
-    const addAction = (label, onClick) => <button type="button" className="scaffold-register-add-cell"
-        aria-label={label} title={label} disabled={mutationBusy} onClick={onClick}><Link2 size={16} aria-hidden="true" /></button>;
+    const addAction = (label, onClick, linked = false) => <button type="button" className="scaffold-register-add-cell"
+        aria-label={label} title={label} disabled={mutationBusy} onClick={onClick}>{linked ? <Link2 size={16} aria-hidden="true" /> : <CirclePlus size={16} aria-hidden="true" />}</button>;
 
     const filteredRecords = useMemo(() => {
         const search = query.trim().toLowerCase();
@@ -611,15 +631,27 @@ export default function ScaffoldRegisterPage({
         });
     }, [query, records]);
 
+    const lifecycleStatus = item => resolveScaffoldLifecycle(item.registerRecord, item.tag?.qrLabelAssignedAt).status;
+    const statusTabs = [['all', 'All'], ['active', 'Active'], ['awaiting-qr', 'Awaiting QR'], ['dismantled', 'Dismantled']];
+    const visibleRecords = filteredRecords.filter(item => statusFilter === 'all' || lifecycleStatus(item) === statusFilter);
+
     const getBuilderLogoUrl = builder => builderLogoUrls.get(builder?.id) || builder?.logoUrl || '';
     const selectedBuilderLogoUrl = getBuilderLogoUrl(selectedBuilder);
 
     return (
         <main className="scaffold-register-page">
+            <header className="scaffold-register-heading" inert={editor ? "" : undefined}>
+                <div><h1>Scaffold Register</h1><p>Scaffold status, inspections and linked documents</p></div>
+                <button type="button" className="scaffold-register-add" disabled={mutationBusy || !hasSpecificSite}
+                    title={hasSpecificSite ? 'Add scaffold' : 'Select a specific site to add a scaffold'}
+                    onClick={() => {setScaffoldName(''); setNameError(''); setNameDialogOpen(true);}}>
+                    <Plus size={18} aria-hidden="true" /><span>Add scaffold</span>
+                </button>
+            </header>
             <section className="scaffold-register-toolbar" inert={editor ? "" : undefined} aria-hidden={Boolean(editor)} aria-label="Scaffold Register filters">
                 <div className="scaffold-register-dropdowns">
                     <RegisterDropdown
-                        label="Builder"
+                        label="Client"
                         selectedItem={selectedBuilder}
                         items={[ALL_BUILDERS, ...builders]}
                         getLabel={builder => builder.name}
@@ -667,7 +699,7 @@ export default function ScaffoldRegisterPage({
 
             {error ? <div className="scaffold-register-error" role="alert">{error}</div> : null}
 
-            <section inert={editor ? "" : undefined} aria-hidden={Boolean(editor)} className={`scaffold-register-table-wrap${recordsLoading || buildersLoading ? ' is-loading' : ''}`}>
+            <section inert={editor ? "" : undefined} aria-hidden={Boolean(editor)} className={`scaffold-register-cards-wrap${recordsLoading || buildersLoading ? ' is-loading' : ''}`}>
                 {recordsLoading || buildersLoading ? (
                     <div className="scaffold-register-loading page-loading-brandmark"><LoadingBrandmark label="Loading Scaffold Register" /></div>
                 ) : !selectedProject ? (
@@ -676,40 +708,20 @@ export default function ScaffoldRegisterPage({
                         <span>Select a builder and project to view the Scaffold Register.</span>
                     </div>
                 ) : (
-                    <table className="scaffold-register-table" aria-label="Scaffold register" style={{'--context-width': `${contextColumnCount * 170}px`, '--column-base': contextColumnCount ? '1180px' : '100%'}}>
-                        <caption className="scaffold-register-add-row">
-                            <button type="button" className="scaffold-register-add" disabled={mutationBusy || !hasSpecificSite}
-                                title={hasSpecificSite ? 'Add scaffold' : 'Select a specific site to add a scaffold'}
-                                onClick={() => {setScaffoldName(''); setNameError(''); setNameDialogOpen(true);}}>
-                                <Plus size={18} aria-hidden="true" /><span>Add scaffold</span>
-                            </button>
-                        </caption>
-                        <thead>
-                            <tr>
-                                {showBuilderColumn && <th className="scaffold-register-context-column" scope="col">BUILDER</th>}
-                                {showSiteColumn && <th className="scaffold-register-context-column" scope="col">SITE</th>}
-                                <th className="scaffold-register-column-scaffold">SCAFFOLD</th>
-                                <th className="scaffold-register-column-status">STATUS</th>
-                                <th className="scaffold-register-column-active-time">ACTIVE TIME</th>
-                                <th className="scaffold-register-column-drawing">DESIGN DRAWING</th>
-                                <th className="scaffold-register-column-handover">HANDOVER CERTIFICATE</th>
-                                <th className="scaffold-register-column-tag">SCAFF-TAG</th>
-                                <th className="scaffold-register-column-qr">QR LABEL</th>
-                                <th className="scaffold-register-column-updated">LAST UPDATED</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredRecords.length === 0 && (
-                                <tr>
-                                    <td colSpan={8 + contextColumnCount} className="scaffold-register-empty-cell">
-                                        <div className="scaffold-register-empty">
-                                            <ListTree size={24} aria-hidden="true" />
-                                            <span>{records.length ? 'No scaffolds match the current search.' : 'No scaffold records yet. Add a scaffold to get started.'}</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
-                            {filteredRecords.map(item => {
+                    <>
+                        <div className="scaffold-register-tabs" aria-label="Filter scaffolds by status">
+                            {statusTabs.map(([value, label]) => <button key={value} type="button" aria-pressed={statusFilter === value}
+                                className={statusFilter === value ? 'is-selected' : ''} onClick={() => setStatusFilter(value)}>
+                                {label}<span>{filteredRecords.filter(item => value === 'all' || lifecycleStatus(item) === value).length}</span>
+                            </button>)}
+                        </div>
+                        {visibleRecords.length === 0 && <div className="scaffold-register-empty">
+                            <ListTree size={24} aria-hidden="true" />
+                            <span>{records.length ? 'No scaffolds match the current search or status.' : 'No scaffold records yet. Add a scaffold to get started.'}</span>
+                            {records.length > 0 && <button type="button" onClick={() => {setQuery(''); setStatusFilter('all');}}>Clear filters</button>}
+                        </div>}
+                        <div className="scaffold-register-card-grid">
+                            {visibleRecords.map(item => {
                                 const drawing = item.registerRecord?.drawingDocumentId && item.registerRecord?.drawingDocumentType
                                     ? item.registerRecord
                                     : item.handover;
@@ -736,91 +748,56 @@ export default function ScaffoldRegisterPage({
                                     lifecycle.stoppedAt,
                                     clockNow
                                 );
+                                const lastInspection = [...(item.tag?.inspectionRecords || [])].reverse().find(row => row.date);
+                                const lastDate = lastInspection?.date || item.tag?.dateErected || '';
+                                const lastDateLabel = lastDate ? formatScaffoldDate(lastDate) : '—';
                                 return (
-                                    <tr key={JSON.stringify([item.builderId, item.projectId, item.id])}
-                                        tabIndex={0}
-                                        onContextMenu={event => openRowMenu(event, item)}
-                                        onKeyDown={event => {
-                                            if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-                                                openRowMenu(event, item);
-                                            }
-                                        }}
-                                    >
-                                        {showBuilderColumn && <td title={item.builderName}>{item.builderName || '-'}</td>}
-                                        {showSiteColumn && <td title={item.projectName}>{item.projectName || '-'}</td>}
-                                        <td><span className="scaffold-register-cell-value" title={item.scaffoldName}>{item.scaffoldName}</span></td>
-                                        <td>
-                                            <span className={`scaffold-register-lifecycle-status is-${lifecycle.status}`}>
-                                                <span aria-hidden="true" />
-                                                {statusLabel}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span
-                                                className={`scaffold-register-elapsed${lifecycle.status === 'dismantled' ? ' is-stopped' : ''}`}
-                                                title={lifecycle.startedAt ? `Active since ${formatUpdatedAt(lifecycle.startedAt)}` : 'Timer starts when a QR label is linked'}
-                                            >
-                                                <Clock3 size={13} /> {elapsed}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div className="scaffold-register-document-actions"><LinkedDocumentButton
-                                                title={drawingTitle}
-                                                linked={hasDrawing}
-                                                opening={mutationBusy}
-                                                onClick={() => onOpenDrawing?.({
-                                                    id: drawing.drawingDocumentId,
-                                                    fileType: drawing.drawingDocumentType,
-                                                    fileName: drawing.drawingDocumentName || drawing.drawingNumber || 'Design drawing.pdf',
-                                                    versionKey: drawing.drawingRevisionNumber || drawing.updatedAt || ''
-                                                })}
-                                            />
-                                            {lifecycle.status !== 'dismantled' && addAction(`Link design for ${item.scaffoldName}`, () => setDesignItem(item))}</div>
-                                        </td>
-                                        <td>
-                                            <div className="scaffold-register-document-actions"><LinkedDocumentButton
-                                                title={handoverNumber || item.handover?.formReferenceName || 'Handover certificate'}
-                                                linked={Boolean(item.handover)}
-                                                opening={mutationBusy}
-                                                onClick={() => openFormEditor('handover', item)}
-                                            />
-                                            {!item.handover && lifecycle.status !== 'dismantled' && addAction(`Create handover for ${item.scaffoldName}`, () => openFormEditor('handover', item))}</div>
-                                        </td>
-                                        <td>
-                                            <div className="scaffold-register-document-actions"><LinkedDocumentButton
-                                                title={tagNumber || item.tag?.scaffoldNo || 'Scaff-Tag'}
-                                                linked={Boolean(item.tag)}
-                                                opening={mutationBusy}
-                                                onClick={() => openFormEditor('tag', item)}
-                                            />
-                                            {!item.tag && lifecycle.status !== 'dismantled' && addAction(`Create Scaff-Tag for ${item.scaffoldName}`, () => openFormEditor('tag', item))}</div>
-                                        </td>
-                                        <td>
-                                            {hasQrLabel ? (
-                                                <button
-                                                    type="button"
-                                                    className="scaffold-register-qr-link"
-                                                    onClick={() => window.open(item.tag.qrTargetUrl, '_blank', 'noopener,noreferrer')}
-                                                    title={`Open ${item.tag.qrLabelNumber || 'QR label'}`}
-                                                >
-                                                    {item.tag.qrLabelNumber || 'Open QR'}
-                                                </button>
-                                            ) : (
-                                                <span className="scaffold-register-status-pill">
-                                                    {lifecycle.status === 'dismantled' ? 'Dismantled' : 'Awaiting QR'}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td><time dateTime={item.updatedAt}>{formatUpdatedAt(item.updatedAt)}</time>
-                                            {inspectionReminder && <span className={`scaffold-register-inspection-reminder${inspectionReminder.overdue ? ' is-overdue' : ''}`} title={`Inspection due ${inspectionDueDate}`}>
-                                                <Clock3 size={11} aria-hidden="true" />{inspectionReminder.label}
-                                            </span>}
-                                        </td>
-                                    </tr>
+                                    <article key={JSON.stringify([item.builderId, item.projectId, item.id])}
+                                        className={`scaffold-register-card is-${lifecycle.status}`} aria-label={item.scaffoldName}
+                                        onContextMenu={event => openRowMenu(event, item)}>
+                                        <div className="scaffold-card-heading">
+                                            <ScaffoldQrThumbnail url={hasQrLabel ? item.tag.qrTargetUrl : ''} number={hasQrLabel ? item.tag.qrLabelNumber : ''} scaffoldName={item.scaffoldName} />
+                                            <div className="scaffold-card-name"><h2 title={item.scaffoldName}>{item.scaffoldName}</h2>
+                                                <p>{item.builderName}</p>
+                                                <p>{item.projectName}</p>
+                                            </div>
+                                            <span className={`scaffold-register-lifecycle-status is-${lifecycle.status}`}>{statusLabel}</span>
+                                            <button type="button" className="scaffold-card-menu" aria-label={`Actions for ${item.scaffoldName}`} aria-haspopup="menu" onClick={event => openRowMenu(event, item)}><MoreVertical size={18} /></button>
+                                        </div>
+                                        <dl className="scaffold-card-metadata">
+                                            <div><dt>Active time</dt><dd>{elapsed}</dd></div>
+                                            <div><dt>Last inspection</dt><dd>{lastDateLabel}</dd></div>
+                                        </dl>
+                                        <p className={`scaffold-card-reminder ${inspectionReminder?.overdue ? 'is-overdue' : lifecycle.status === 'active' ? 'is-active' : ''}`} title={inspectionDueDate ? `Inspection due ${inspectionDueDate}` : undefined}>
+                                            <Clock3 size={16} aria-hidden="true" />
+                                            {lifecycle.status === 'dismantled' ? 'Dismantled' : inspectionReminder?.label || 'Assign a QR label to activate'}
+                                        </p>
+                                        <div className="scaffold-card-documents">
+                                            <div className="scaffold-card-document">
+                                                <FileText size={16} aria-hidden="true" /><span>Design drawing</span>
+                                                {lifecycle.status !== 'dismantled' && addAction(`Link design for ${item.scaffoldName}`, () => setDesignItem(item), hasDrawing)}
+                                                <LinkedDocumentButton title={drawingTitle} linked={hasDrawing} opening={mutationBusy}
+                                                    onClick={() => onOpenDrawing?.({id:drawing.drawingDocumentId, fileType:drawing.drawingDocumentType, fileName:drawing.drawingDocumentName || drawing.drawingNumber || 'Design drawing.pdf', versionKey:drawing.drawingRevisionNumber || drawing.updatedAt || ''})} />
+                                            </div>
+                                            <div className="scaffold-card-document">
+                                                <FileText size={16} aria-hidden="true" /><span>Handover certificate</span>
+                                                <LinkedDocumentButton title={handoverNumber || 'Handover'} linked={Boolean(item.handover)} opening={mutationBusy} onClick={() => openFormEditor('handover', item)} />
+                                                {!item.handover && lifecycle.status !== 'dismantled' && addAction(`Create handover for ${item.scaffoldName}`, () => openFormEditor('handover', item))}
+                                            </div>
+                                            <div className="scaffold-card-document">
+                                                <Tag size={16} aria-hidden="true" /><span>Scaff-Tag</span>
+                                                <LinkedDocumentButton title={tagNumber || 'Scaff-Tag'} linked={Boolean(item.tag)} opening={mutationBusy} onClick={() => openFormEditor('tag', item)} />
+                                                {!item.tag && lifecycle.status !== 'dismantled' && addAction(`Create Scaff-Tag for ${item.scaffoldName}`, () => openFormEditor('tag', item))}
+                                            </div>
+                                        </div>
+
+                                        <time className="scaffold-card-updated" dateTime={item.updatedAt}>Updated {formatUpdatedAt(item.updatedAt)}</time>
+                                    </article>
                                 );
                             })}
-                        </tbody>
-                    </table>
+                        </div>
+                        <p className="scaffold-register-count">{visibleRecords.length} {visibleRecords.length === 1 ? 'scaffold' : 'scaffolds'}</p>
+                    </>
                 )}
             </section>
             {nameDialogOpen && <dialog ref={nameDialog} className="scaffold-register-name-dialog" onCancel={event => {

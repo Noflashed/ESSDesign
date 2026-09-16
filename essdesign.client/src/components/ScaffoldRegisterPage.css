@@ -486,6 +486,11 @@
     color: #15803d;
 }
 
+.scaffold-register-lifecycle-status.is-awaiting-qr {
+    background: #fef9c3;
+    color: #854d0e;
+}
+
 .scaffold-register-lifecycle-status.is-dismantled {
     background: #e2e8f0;
     color: #475569;
@@ -743,3 +748,64 @@
     white-space: normal;
 }
 .scaffold-register-inspection-reminder.is-overdue { color: #a66b36; }
+
+/* Card register: document actions stay attached to their scaffold. */
+.scaffold-register-page { background: var(--bg-secondary, #f4f6f8); gap: 24px; padding: 28px; }
+.scaffold-register-heading { display:flex; justify-content:space-between; align-items:center; gap:20px; flex-shrink:0; }
+.scaffold-register-heading h1 { margin:0; font-size:30px; font-weight:750; letter-spacing:-.8px; color:var(--text-primary, #12283f); }
+.scaffold-register-heading p { margin:7px 0 0; color:var(--text-secondary, #64748b); font-size:14px; }
+.scaffold-register-heading .scaffold-register-add { display:flex; gap:8px; align-items:center; padding:12px 18px; border:0; border-radius:9px; background:#142d46; color:#fff; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.scaffold-register-heading .scaffold-register-add:disabled { opacity:.45; cursor:not-allowed; }
+.scaffold-register-cards-wrap { min-height:0; overflow:auto; flex:1; padding:0 4px 12px 0; }
+.scaffold-register-tabs { display:flex; gap:12px; margin-bottom:22px; }
+.scaffold-register-tabs button { display:flex; gap:9px; align-items:center; padding:10px 14px; border:0; border-bottom:2px solid transparent; border-radius:8px 8px 0 0; color:var(--text-secondary,#64748b); background:transparent; font:inherit; font-size:13px; cursor:pointer; white-space:nowrap; }
+.scaffold-register-tabs button span { padding:1px 6px; border-radius:12px; background:var(--bg-tertiary,#e7ecf1); font-size:11px; }
+.scaffold-register-tabs button.is-selected { color:#1764d5; background:#e7f0ff; border-bottom-color:#1764d5; }
+.scaffold-register-card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr)); gap:20px; align-items:stretch; }
+.scaffold-register-card { background:var(--card-bg,#fff); border:1px solid var(--border-color,#dfe6ee); border-radius:12px; padding:20px 18px 12px; box-shadow:0 3px 14px rgba(15,35,55,.035); min-width:0; }
+.scaffold-register-card.is-dismantled { background:var(--bg-secondary,#f3f5f8); }
+.scaffold-card-heading { display:flex; align-items:flex-start; gap:10px; min-height:54px; }
+.scaffold-card-name { flex:1; min-width:0; }
+.scaffold-card-name h2 { margin:0; font-size:16px; line-height:1.4; letter-spacing:-.3px; font-weight:700; overflow-wrap:anywhere; }
+.scaffold-card-name p { margin:3px 0 0; color:var(--text-secondary,#718096); font-size:12px; line-height:1.4; overflow-wrap:anywhere; }
+.scaffold-card-heading .scaffold-register-lifecycle-status { font-size:11px; padding:4px 8px; white-space:nowrap; }
+.scaffold-card-menu { padding:2px 0; border:0; background:transparent; color:var(--text-secondary,#64748b); cursor:pointer; }
+.scaffold-card-metadata { display:grid; grid-template-columns:1fr 1fr; margin:20px 0 12px; }
+.scaffold-card-metadata>div+div { border-left:1px solid var(--border-color,#e5eaf0); padding-left:15px; }
+.scaffold-card-metadata dt { text-transform:uppercase; font-size:10px; letter-spacing:.7px; color:var(--text-secondary,#718096); }
+.scaffold-card-metadata dd { margin:5px 0 0; font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
+.scaffold-card-reminder { display:flex; align-items:center; gap:7px; margin:0 0 16px; min-height:20px; color:var(--text-secondary,#64748b); font-size:12px; }
+.scaffold-card-reminder.is-active { color:#16834a; }
+.scaffold-card-reminder.is-overdue { color:#c13e32; }
+.scaffold-card-documents { border-top:1px solid var(--border-color,#e5eaf0); }
+.scaffold-card-document { display:flex; align-items:center; gap:9px; min-height:39px; border-bottom:1px solid var(--border-color,#e5eaf0); font-size:12px; }
+.scaffold-card-document>svg { flex-shrink:0; color:var(--text-secondary,#60738c); }
+.scaffold-card-document>span:first-of-type { flex:1 0 auto; white-space:nowrap; }
+.scaffold-card-document .scaffold-register-document-link { min-width:0; max-width:40%; flex-shrink:1; padding:4px 0; font-size:12px; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.scaffold-card-document .scaffold-register-missing-link { font-size:11px; color:var(--text-secondary,#64748b); }
+.scaffold-card-document .scaffold-register-add-cell { width:24px; height:28px; flex-shrink:0; }
+.scaffold-card-updated { display:block; margin-top:12px; font-size:10px; color:var(--text-secondary,#94a3b8); opacity:.8; }
+.scaffold-register-count { margin:18px 0 0; color:var(--text-secondary,#64748b); font-size:12px; }
+.scaffold-register-card-grid:has(.scaffold-register-card:only-child) { grid-template-columns:minmax(0,440px); }
+@media (min-width:1500px) { .scaffold-register-card-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media (max-width:1100px) { .scaffold-register-toolbar { flex-wrap:wrap; } .scaffold-register-dropdowns { flex:1; } .scaffold-register-toolbar-actions { flex:1; } }
+@media (max-width:700px) { .scaffold-register-page { padding:16px; gap:18px; } .scaffold-register-heading { align-items:flex-start; } .scaffold-register-heading h1 { font-size:23px; } .scaffold-register-heading p { font-size:12px; } .scaffold-register-heading .scaffold-register-add { padding:10px; font-size:12px; } .scaffold-register-tabs { gap:0; overflow:auto; } .scaffold-register-tabs button { padding:10px 8px; gap:5px; font-size:12px; } .scaffold-register-card-grid { grid-template-columns:minmax(0,1fr); } .scaffold-register-toolbar .scaffold-register-dropdown { width:100%; min-width:0; } .scaffold-register-dropdowns { flex-direction:column; width:100%; } .scaffold-register-toolbar-actions { width:100%; } }
+.scaffold-card-qr { display:flex; flex-direction:column; align-items:center; gap:3px; width:64px; flex-shrink:0; color:#1764d5; text-decoration:none; font-size:10px; font-weight:600; border-radius:6px; }
+.scaffold-card-qr img { width:64px; height:64px; display:block; border:1px solid var(--border-color,#dfe6ee); border-radius:5px; background:white; }
+.scaffold-card-qr:hover img { border-color:#1764d5; box-shadow:0 0 0 2px #1764d522; }
+.scaffold-card-qr:focus-visible { outline:2px solid #1764d5; outline-offset:3px; }
+.scaffold-card-qr.is-unassigned { color:var(--text-secondary,#64748b); opacity:.5; padding-top:8px; }
+
+:root[data-theme="dark"] .scaffold-register-lifecycle-status.is-awaiting-qr {
+    background: rgba(250, 204, 21, 0.2);
+    color: #fde047;
+}
+
+/* Reserve consistent columns for the label, change/add action and document reference. */
+.scaffold-card-document { display:grid; grid-template-columns:16px max-content 24px minmax(0,1fr); }
+.scaffold-card-document > svg { grid-column:1; grid-row:1; }
+.scaffold-card-document > span:first-of-type { grid-column:2; grid-row:1; }
+.scaffold-card-document .scaffold-register-add-cell { grid-column:3; grid-row:1; margin-left:0; }
+.scaffold-card-document .scaffold-register-document-link { grid-column:4; grid-row:1; max-width:100%; width:100%; text-align:left; }
+.scaffold-card-documents { display:grid; grid-template-columns:16px max-content 24px minmax(0,1fr); column-gap:9px; }
+.scaffold-card-document { grid-column:1 / -1; grid-template-columns:subgrid; }

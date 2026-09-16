@@ -220,7 +220,7 @@ try {
  await page.screenshot({path:'/tmp/ess-handover-web-mobile.png'});
  await page.getByLabel('Go back',{exact:true}).click();
  await page.setViewportSize({width:1440,height:1000});
- const scaffoldRow = page.locator('tbody tr').filter({hasText:'North Elevation'});
+ const scaffoldRow = page.locator('.scaffold-register-card').filter({hasText:'North Elevation'});
  await scaffoldRow.click({button:'right'});
  await page.getByRole('menuitem',{name:'Delete scaffold'}).click();
  assert.equal(await page.locator('#scaffold-delete-description').textContent(),'Delete North Elevation from the Scaffold Register? This cannot be undone.');
