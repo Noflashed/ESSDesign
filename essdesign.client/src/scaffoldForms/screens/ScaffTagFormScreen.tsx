@@ -649,7 +649,8 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
         {text: 'Cancel', style: 'cancel'},
         {text: 'Remove', style: 'destructive', onPress: () => {
           setForm(previous => ({...previous, inspectionRecords: removeInspectionRow(previous.inspectionRecords, index)}));
-          setInspectionSignaturePreviewSizes({});
+          // Measurements belong to rendered cell positions; unchanged cells do not fire onLayout again.
+          // Keep them so the remaining signatures retain non-zero drawing dimensions.
         }},
       ],
     );
