@@ -616,7 +616,6 @@ public static class ScaffTagPublicPageRenderer
     .table-scroll::-webkit-scrollbar { display:none; }
     .table-scroll::-webkit-scrollbar-track { background:#d3e1da; }
     .table-scroll::-webkit-scrollbar-thumb { background:#0b7f45; border:2px solid #d3e1da; border-radius:6px; }
-    .table-scroll-hint { padding:7px 10px; background:#e5f3eb; border-bottom:1px solid #8da9be; color:#0b4f2f; text-align:center; font-size:12px; font-weight:800; }
     .table-scroll.front-rows { max-height:396px; }
     .table-scroll.back-rows { max-height:324px; }
     .table-scroll thead th { position:sticky; top:0; z-index:1; background:#fff; }
@@ -766,7 +765,7 @@ public static class ScaffTagPublicPageRenderer
       return Array.from({length:Math.max(count, used + (used >= count ? 1 : 0))}, (_, index) => records[index] || {});
     };
     const tableWrapper = (count, face) => inspectionRows(count).length > count
-      ? `<div class="table-scroll-hint">↕ Scroll for more inspections</div><div class="table-scroll-shell"><div class="table-scroll ${face}-rows" tabindex="0" role="region" aria-label="Scroll inspection history">`
+      ? `<div class="table-scroll-shell"><div class="table-scroll ${face}-rows" tabindex="0" role="region" aria-label="Scroll inspection history">`
       : '<div>';
     const tableEnd = count => inspectionRows(count).length > count
       ? '</div><div class="table-scroll-track" aria-hidden="true"><div class="table-scroll-thumb"></div></div></div>'
@@ -973,7 +972,7 @@ public static class ScaffTagPublicPageRenderer
       if (photoButton) openPhotoViewer(photoButton);
     });
     stage.addEventListener('pointerdown', event => {
-      if (event.target.closest('.photo, .table-scroll-shell, .table-scroll-hint')) { pointerStart = null; return; }
+      if (event.target.closest('.photo, .table-scroll-shell')) { pointerStart = null; return; }
       activePointers.add(event.pointerId);
       if (activePointers.size > 1) {
         pinchInProgress = true;
@@ -989,7 +988,7 @@ public static class ScaffTagPublicPageRenderer
         if (activePointers.size === 0) pinchInProgress = false;
         return;
       }
-      if (!pointerStart || event.target.closest('.photo, .table-scroll-shell, .table-scroll-hint')) { pointerStart = null; return; }
+      if (!pointerStart || event.target.closest('.photo, .table-scroll-shell')) { pointerStart = null; return; }
       const dx = event.clientX - pointerStart.x;
       const dy = event.clientY - pointerStart.y;
       pointerStart = null;
@@ -1002,7 +1001,7 @@ public static class ScaffTagPublicPageRenderer
       if (activePointers.size === 0) pinchInProgress = false;
     });
     stage.addEventListener('keydown', event => {
-      if (event.target.closest('.photo, .table-scroll-shell, .table-scroll-hint')) return;
+      if (event.target.closest('.photo, .table-scroll-shell')) return;
       if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setBack(!isBack); }
     });
     photoViewerClose.addEventListener('click', closePhotoViewer);
