@@ -209,6 +209,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
   });
   const isReadOnly = route.params.readOnly === true;
   const nextInspectionIndex = form.inspectionRecords.findIndex(row => !row.date);
+  const latestInspectionIndex = form.inspectionRecords.reduce((latest, row, index) => inspectionRowHasContent(row) ? index : latest, -1);
   const complianceRows = complianceTableRows(form.inspectionRecords);
   React.useEffect(() => {
     setForm(previous => {
@@ -1175,7 +1176,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                   <Text style={styles.authorisedHeaderText}>AUTHORISED PERSON</Text>
                 </View>
                 <View style={styles.authorisedTable}>
-                  <View style={[styles.authorisedTableHeader, form.inspectionRecords.length > 10 && styles.scrollTableHeader]}>
+                  <View style={[styles.authorisedTableHeader, !isReadOnly && styles.inspectionDeleteGutter, form.inspectionRecords.length > 10 && styles.scrollTableHeader]}>
                     <Text style={[styles.authHeaderCell, styles.authDateCell]}>DATE</Text>
                     <Text style={[styles.authHeaderCell, styles.authTimeCell]}>TIME</Text>
                     <Text style={[styles.authHeaderCell, styles.authNameCell]}>NAME</Text>
@@ -1185,13 +1186,16 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                   {form.inspectionRecords.map((row, index) => {
                     const isActive = inspectionRowHasContent(row);
                     return (
-                      <View key={`front-auth-${index}`} style={styles.authorisedTableRow}>
-                        <Pressable
+                      <View key={`front-auth-${index}`} style={[styles.authorisedTableRow, !isReadOnly && styles.inspectionDeleteRowGutter]}>
+                        {!isReadOnly && index === latestInspectionIndex && <TouchableOpacity
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove latest inspection, row ${index + 1}`}
+                          style={styles.latestInspectionDelete}
+                          onPress={() => confirmRemoveInspection(index)}>
+                          <Feather name="minus-circle" size={20} color="#B42318" />
+                        </TouchableOpacity>}
+                        <View
                           collapsable={false}
-                          disabled={isReadOnly || !isActive}
-                          onLongPress={() => confirmRemoveInspection(index)}
-                          delayLongPress={600}
-                          accessibilityHint={isReadOnly || !isActive ? undefined : 'Long press to remove this inspection'}
                           style={[styles.authCellButton, styles.authDateCell]}>
                           {!row.date && index === nextInspectionIndex && !isReadOnly ? (
                             <TouchableOpacity
@@ -1206,7 +1210,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                           ) : (
                             <Text style={styles.authCellText}>{formatScaffoldDate(row.date || '')}</Text>
                           )}
-                        </Pressable>
+                        </View>
                         <View style={[styles.authInput, styles.authTimeCell, styles.authTimeValueCell]}>
                           <Text style={styles.authCellText}>{row.time || ''}</Text>
                         </View>
@@ -1224,9 +1228,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                           disabled={isReadOnly || !isActive}
                           style={[styles.authSignatureButton, styles.authSignatureCell]}
                           onPress={() => openSignatureModal({type: 'inspection', index})}
-                          onLongPress={() => confirmRemoveInspection(index)}
-                          delayLongPress={600}
-                          accessibilityHint={isReadOnly || !isActive ? undefined : 'Tap to edit the signature. Long press to remove this inspection.'}
+                          accessibilityHint={isReadOnly || !isActive ? undefined : 'Tap to edit the signature.'}
                           onLayout={evt => {
                             const size = readLayoutSize(evt);
                             if (size.width <= 0 || size.height <= 0) {
@@ -1876,6 +1878,17 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       borderRightColor: '#8DA9BE',
       justifyContent: 'center',
       paddingHorizontal: 4,
+    },
+    inspectionDeleteGutter: {marginLeft: 28},
+    inspectionDeleteRowGutter: {paddingLeft: 28},
+    latestInspectionDelete: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     inspectionAddButton: {
       width: 26,
