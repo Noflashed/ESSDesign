@@ -29,10 +29,17 @@ try {
     `${baseURL}/tests/fixtures/register-dropdowns.html?project-data`,
   );
   await count(3);
+  await page.getByRole("button", { name: "Builder", exact: true }).click();
   await page
-    .getByRole("combobox", { name: "Builder", exact: true })
-    .selectOption("alpha");
+    .getByRole("option", { name: "Alpha Builder", exact: true })
+    .click();
   await count(2);
+  await page.waitForFunction(()=>document.querySelector('.pf-scope .scaffold-register-dropdown-trigger img')?.naturalWidth>0);
+  await page.getByRole('button',{name:'Builder',exact:true}).click();
+  assert.equal(await page.getByRole('option',{name:'Alpha Builder',exact:true}).locator('img').count(),1);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.project-files-page').evaluate(e=>getComputedStyle(e).fontFamily),'Arial, sans-serif');
+  assert.equal(await page.locator('.pf-document strong').first().evaluate(e=>getComputedStyle(e).fontWeight),'500');
   await page
     .getByRole("combobox", { name: "Project", exact: true })
     .selectOption("north");
@@ -41,9 +48,8 @@ try {
     .getByRole("combobox", { name: "Project", exact: true })
     .selectOption("__all__");
   await count(2);
-  await page
-    .getByRole("combobox", { name: "Builder", exact: true })
-    .selectOption("__all__");
+  await page.getByRole("button", { name: "Builder", exact: true }).click();
+  await page.getByRole("option", { name: "All Builders", exact: true }).click();
   await count(3);
   for (const type of ["Handovers", "Day Labour / Variations", "Pre-starts"]) {
     await page.getByRole("button", { name: type, exact: true }).click();
@@ -200,21 +206,20 @@ try {
         .evaluate((e) => e.scrollHeight <= e.clientHeight + 1),
       true,
       JSON.stringify(
-        await page
-          .locator(".pf-table-area")
-          .evaluate((e) => ({
-            h: e.clientHeight,
-            scroll: e.scrollHeight,
-            rows: [...e.querySelectorAll("tr")].map(
-              (r) => r.getBoundingClientRect().height,
-            ),
-          })),
+        await page.locator(".pf-table-area").evaluate((e) => ({
+          h: e.clientHeight,
+          scroll: e.scrollHeight,
+          rows: [...e.querySelectorAll("tr")].map(
+            (r) => r.getBoundingClientRect().height,
+          ),
+        })),
       ),
     );
   }
+  await page.getByRole("button", { name: "Builder", exact: true }).click();
   await page
-    .getByRole("combobox", { name: "Builder", exact: true })
-    .selectOption("alpha");
+    .getByRole("option", { name: "Alpha Builder", exact: true })
+    .click();
   await page
     .getByRole("combobox", { name: "Project", exact: true })
     .selectOption("north");
@@ -232,9 +237,10 @@ try {
       baseURL + "/tests/fixtures/register-dropdowns.html?project-data",
     );
     await count(3);
+    await page.getByRole("button", { name: "Builder", exact: true }).click();
     await page
-      .getByRole("combobox", { name: "Builder", exact: true })
-      .selectOption("alpha");
+      .getByRole("option", { name: "Alpha Builder", exact: true })
+      .click();
     await page
       .getByRole("combobox", { name: "Project", exact: true })
       .selectOption("north");

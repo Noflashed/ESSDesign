@@ -47,6 +47,7 @@ import {
 } from "../utils/projectDataScope";
 import { isFormShared } from "../utils/projectDataStatus";
 import { normalizeCompanyEntityId } from "../scaffoldForms/config/companyEntities";
+import { RegisterDropdown } from "./ScaffoldRegisterPage";
 import ScaffoldFormEditor from "./ScaffoldFormEditor";
 import LoadingBrandmark from "./LoadingBrandmark";
 import "./ProjectFilesPage.css";
@@ -192,6 +193,29 @@ export default function ESSSafetyPage() {
       active = false;
     };
   }, []);
+  const [builderLogos, setBuilderLogos] = useState({});
+  useEffect(() => {
+    let active = true;
+    Promise.all(
+      builders
+        .filter((item) => item.logoPath || item.logoUrl || item.logo_url)
+        .map(async (item) => {
+          try {
+            return [
+              item.id,
+              await safetyProjectsAPI.resolveBuilderLogoUrl(item),
+            ];
+          } catch {
+            return [item.id, item.logoUrl || item.logo_url || ""];
+          }
+        }),
+    ).then((entries) => {
+      if (active) setBuilderLogos(Object.fromEntries(entries));
+    });
+    return () => {
+      active = false;
+    };
+  }, [builders]);
   const projects = useMemo(
     () => projectScopeOptions(builders, builderId),
     [builders, builderId],
@@ -625,24 +649,27 @@ export default function ESSSafetyPage() {
             ))}
           </nav>
           <div className="pf-scope">
-            <select
-              aria-label="Builder"
-              value={builderId}
-              onChange={(e) => {
+            <RegisterDropdown
+              label="Builder"
+              selectedItem={[ALL_BUILDERS, ...builders].find(
+                (item) => item.id === builderId,
+              )}
+              items={[ALL_BUILDERS, ...builders]}
+              getLabel={(item) => item.name}
+              getLogoUrl={(item) =>
+                item.isAll
+                  ? ""
+                  : builderLogos[item.id] || item.logoUrl || item.logo_url || ""
+              }
+              onSelect={(item) => {
                 const scope = resolveProjectScope(builders, {
-                  builderId: e.target.value,
+                  builderId: item.id,
                   projectId: ALL_SCOPE,
                 });
                 setBuilderId(scope.builderId);
                 setProjectId(scope.projectId);
               }}
-            >
-              {[ALL_BUILDERS, ...builders].map((builder) => (
-                <option key={builder.id} value={builder.id}>
-                  {builder.name}
-                </option>
-              ))}
-            </select>
+            />
             <select
               aria-label="Project"
               value={projectId}

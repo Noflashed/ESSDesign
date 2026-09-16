@@ -829,3 +829,192 @@
 .pf-document {
   height: calc(var(--pf-row) - 1px);
 }
+/* Match the reviewed preview typography, without inheriting application button weights. */
+.project-files-page {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+}
+.project-files-page .pf-scope .scaffold-register-dropdown {
+  width: 190px;
+  min-width: 0;
+  flex: 0 1 190px;
+}
+.project-files-page .pf-scope .scaffold-register-dropdown-trigger {
+  height: 34px;
+  grid-template-columns: 28px minmax(0, 1fr) 13px;
+  gap: 6px;
+  padding: 0 9px 0 7px;
+  border: 1px solid var(--border-color, #d7d7d7);
+  border-radius: 6px;
+  background: var(--card-bg, #fff);
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+}
+.project-files-page .scaffold-register-builder-logo,
+.project-files-page .scaffold-register-builder-logo.has-image {
+  width: 28px;
+  height: 24px;
+  font-size: 10px;
+}
+.project-files-page .scaffold-register-dropdown-menu {
+  min-width: 220px;
+  max-height: min(320px, 50vh);
+  z-index: 150;
+}
+.project-files-page .scaffold-register-dropdown-menu > button {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  grid-template-columns: 28px minmax(0, 1fr);
+  min-height: 38px;
+}
+.project-files-page .pf-recent-card small:first-of-type {
+  font-size: 11px;
+}
+.pf-create-card,
+.pf-recent-card {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+.pf-create-card:hover,
+.pf-recent-card:hover {
+  border-color: #cfcfcf !important;
+}
+.pf-create-card > span,
+.pf-recent-card > svg,
+.pf-file-icon {
+  transition:
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+.pf-create-card:hover > span {
+  transform: rotate(-4deg);
+}
+.pf-create-card > svg {
+  transition:
+    transform 180ms ease,
+    color 180ms ease;
+}
+.pf-create-card:hover > svg {
+  transform: rotate(90deg);
+  color: var(--text-primary, #333);
+}
+.pf-recent-card:hover > svg,
+.pf-table-row:hover .pf-file-icon {
+  background: var(--hover-bg, #e9e9e9);
+}
+.pf-table-row:hover .pf-file-icon {
+  transform: translateY(-1px);
+}
+.pf-tabs button,
+.pf-filter-button,
+.pf-pagination button,
+.pf-row-actions,
+.pf-modal button,
+.pf-filter-popover button,
+.pf-selection button,
+.pf-context-menu button {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+.pf-tabs button:active,
+.pf-filter-button:active,
+.pf-pagination button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.pf-row-actions:hover {
+  transform: scale(1.08);
+}
+.pf-scope select,
+.pf-search {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.pf-scope select:hover,
+.pf-search:hover {
+  border-color: #bcbcbc !important;
+}
+.pf-search:focus-within {
+  border-color: #999 !important;
+  box-shadow: 0 0 0 3px #00000005;
+}
+.project-files-page .scaffold-register-dropdown-menu {
+  animation: pf-menu-enter 150ms ease-out;
+  transform-origin: top left;
+}
+.pf-context-menu,
+.pf-filter-popover {
+  animation: pf-menu-enter 150ms ease-out;
+  transform-origin: top right;
+}
+.pf-create-cards {
+  animation: pf-content-enter 260ms ease-out;
+}
+.pf-recent {
+  animation: pf-content-enter 320ms ease-out;
+}
+.pf-panel {
+  animation: pf-content-enter 380ms ease-out;
+}
+.pf-selection,
+.pf-filter-summary {
+  animation: pf-content-enter 160ms ease-out;
+}
+@keyframes pf-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pf-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 800px) {
+  .project-files-page .pf-scope .scaffold-register-dropdown {
+    width: 50%;
+    flex: 1 1 50%;
+  }
+  .project-files-page .pf-recent-card small:first-of-type {
+    font-size: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .project-files-page *,
+  .pf-context-menu,
+  .pf-context-menu *,
+  .pf-modal,
+  .pf-modal * {
+    animation: none !important;
+    transition: none !important;
+  }
+  .pf-create-card:hover > span,
+  .pf-create-card:hover > svg,
+  .pf-table-row:hover .pf-file-icon,
+  .pf-row-actions:hover,
+  .pf-tabs button:active,
+  .pf-filter-button:active,
+  .pf-pagination button:active:not(:disabled) {
+    transform: none !important;
+  }
+}

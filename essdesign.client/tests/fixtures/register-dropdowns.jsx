@@ -7,7 +7,7 @@ import ProjectDataRegisterPage from '../../src/components/ProjectDataRegisterPag
 import {safetyFilesAPI, safetyProjectsAPI, handoverCertificatesAPI, scaffTagsAPI, scaffTagQrLabelsAPI, dayLabourVariationsAPI, preStartsAPI} from '../../src/services/api';
 const registerType = new URLSearchParams(location.search).get('type') || 'handovers';
 const builders = [
- {id:'alpha',name:'Alpha Builder',projects:[{id:'north',name:'North Site'},{id:'south',name:'South Site'}]},
+ {id:'alpha',name:'Alpha Builder',logoUrl:'/scaffold-forms/logo.png',projects:[{id:'north',name:'North Site'},{id:'south',name:'South Site'}]},
  {id:'beta',name:'Beta Builder',projects:[{id:'west',name:'West Site'}]},
  {id:'empty',name:'Empty Builder',projects:[]},
 ];
