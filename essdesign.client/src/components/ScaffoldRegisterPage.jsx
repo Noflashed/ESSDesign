@@ -70,8 +70,7 @@ function ScaffoldQrThumbnail({url, number, scaffoldName}) {
         : <span className="scaffold-card-qr is-unassigned" title="No QR label assigned">{content}</span>;
 }
 
-function ExpandedScaffoldCard({name, children, onClose}) {
-    const dialog = useRef(null);
+function ExpandedScaffoldCard({name, children, onClose, dialog}) {
     useEffect(() => {
         const node = dialog.current;
         node.showModal();
@@ -82,7 +81,7 @@ function ExpandedScaffoldCard({name, children, onClose}) {
         onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
         <div className="scaffold-card-dialog-panel">
             <button type="button" className="scaffold-card-dialog-close" aria-label="Close scaffold details" onClick={onClose}><X size={20} /></button>
-            <div onClickCapture={event => { if (event.target.closest('button, a')) onClose(); }} onContextMenuCapture={onClose}>{children}</div>
+            <div>{children}</div>
         </div>
     </dialog>, document.body);
 }
@@ -258,6 +257,7 @@ export default function ScaffoldRegisterPage({
     const [designItem, setDesignItem] = useState(null);
     const [editor, setEditor] = useState(null);
     const [expandedCard, setExpandedCard] = useState(null);
+    const expandedDialogRef = useRef(null);
     const [reportsItem, setReportsItem] = useState(null);
     useEffect(() => { setReportsItem(null); }, [selectedBuilderId, selectedProjectId]);
     const promotedRecords = useRef(new Map());
@@ -470,6 +470,7 @@ export default function ScaffoldRegisterPage({
             );
             promotedRecords.current.delete(`${pendingDelete.builderId}:${pendingDelete.projectId}:${pendingDelete.item.id}`);
             setPendingDelete(null);
+            setExpandedCard(null);
         } catch (deleteFailure) {
             setDeleteError(deleteFailure.message || 'Could not delete the scaffold. Please try again.');
         } finally {
@@ -718,7 +719,7 @@ export default function ScaffoldRegisterPage({
                                                 <FileText size={16} aria-hidden="true" /><span>Design drawing</span>
                                                 {lifecycle.status !== 'dismantled' && addAction(`Link design for ${item.scaffoldName}`, () => setDesignItem(item), hasDrawing)}
                                                 <LinkedDocumentButton title={drawingTitle} linked={hasDrawing} opening={mutationBusy}
-                                                    onClick={() => onOpenDrawing?.({id:drawing.drawingDocumentId, fileType:drawing.drawingDocumentType, fileName:drawing.drawingDocumentName || drawing.drawingNumber || 'Design drawing.pdf', versionKey:drawing.drawingRevisionNumber || drawing.updatedAt || ''})} />
+                                                    onClick={() => { onOpenDrawing?.({id:drawing.drawingDocumentId, fileType:drawing.drawingDocumentType, fileName:drawing.drawingDocumentName || drawing.drawingNumber || 'Design drawing.pdf', versionKey:drawing.drawingRevisionNumber || drawing.updatedAt || ''}); setExpandedCard(null); }} />
                                             </div>
                                             <div className="scaffold-card-document">
                                                 <FileText size={16} aria-hidden="true" /><span>Handover certificate</span>
@@ -833,7 +834,7 @@ export default function ScaffoldRegisterPage({
                     </>
                 )}
             </section>
-            {expandedCard && <ExpandedScaffoldCard name={expandedCard.scaffoldName} onClose={() => setExpandedCard(null)}>
+            {expandedCard && !editor && !designItem && !reportsItem && !pendingDelete && <ExpandedScaffoldCard dialog={expandedDialogRef} name={expandedCard.scaffoldName} onClose={() => setExpandedCard(null)}>
                 {renderCard(records.find(item => item.id === expandedCard.id && item.builderId === expandedCard.builderId && item.projectId === expandedCard.projectId) || expandedCard, true)}
             </ExpandedScaffoldCard>}
             {nameDialogOpen && <dialog ref={nameDialog} className="scaffold-register-name-dialog" onCancel={event => {
@@ -865,7 +866,7 @@ export default function ScaffoldRegisterPage({
                         setPendingDelete({ item: contextMenu.item, builderId: contextMenu.item.builderId, projectId: contextMenu.item.projectId });
                         setContextMenu(null);
                     }}><Trash2 size={16} aria-hidden="true" />Delete scaffold</button>
-                </div>, document.body
+                </div>, expandedDialogRef.current || document.body
             ) : null}
             {pendingDelete ? createPortal(
                 <dialog ref={deleteDialogRef} className="scaffold-register-delete-dialog"

@@ -1061,3 +1061,6 @@
 }
 
 @media(prefers-reduced-motion:reduce) { .monthly-report-row { transition:none; } }
+
+.scaffold-card-dialog .scaffold-card-menu { position:absolute; top:14px; right:56px; width:32px; height:32px; display:grid; place-items:center; padding:0; }
+.scaffold-card-dialog .scaffold-register-lifecycle-status { position:absolute; top:30px; right:100px; transform:translateY(-50%); }

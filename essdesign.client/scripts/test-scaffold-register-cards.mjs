@@ -29,6 +29,18 @@ try {
  assert.ok(box.width > 600);
  assert.ok(Math.abs(box.x + box.width / 2 - 720) < 2, 'Dialog centered horizontally');
  assert.ok(Math.abs(box.y + box.height / 2 - 500) < 2, 'Dialog centered vertically');
+ const centers = await dialog.locator('.scaffold-card-dialog-close,.scaffold-card-menu,.scaffold-register-lifecycle-status').evaluateAll(nodes=>nodes.map(node=>{const rect=node.getBoundingClientRect();return rect.y+rect.height/2;}));
+ assert.ok(Math.max(...centers)-Math.min(...centers)<2,'Header controls vertically aligned');
+ await dialog.getByRole('button',{name:'Actions for Sample Scaffold',exact:true}).click();
+ await page.getByRole('menuitem',{name:'Delete scaffold',exact:true}).waitFor();
+ assert.ok(await dialog.isVisible(),'Menu keeps card open');
+ await page.getByRole('menuitem',{name:'Delete scaffold',exact:true}).click();
+ await page.getByRole('button',{name:'Cancel',exact:true}).click();
+ await dialog.waitFor();
+ await dialog.getByRole('button',{name:'Monthly Inspection Reports',exact:true}).click();
+ await page.locator('.monthly-report-row').first().waitFor();
+ await page.getByRole('button',{name:'Scaffold register',exact:true}).click();
+ await dialog.waitFor();
  await page.keyboard.press('Escape');
  await dialog.waitFor({state:'hidden'});
  const card = page.locator('.scaffold-register-card').first();
@@ -40,6 +52,9 @@ try {
  await page.getByRole('button',{name:'Actions for Sample Scaffold',exact:true}).click();
  assert.equal(await page.locator('.scaffold-card-dialog').count(),0);
  await page.keyboard.press('Escape');
+ await page.getByRole('heading',{name:'Sample Scaffold',exact:true}).click();
+ await dialog.getByRole('button',{name:'H-0021',exact:true}).click();
+ await page.getByRole('dialog',{name:'Handover Certificate form',exact:true}).waitFor();
  assert.deepEqual(errors,[]);
  console.log('PASS: six sample cards, lifecycle counts, overdue state, filtering and responsive widths');
 } finally {await browser.close();}
