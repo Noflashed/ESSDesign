@@ -20,6 +20,7 @@ try {
  const editor=page.getByRole('dialog',{name:'Inspection Report form',exact:true});
  await editor.waitFor();
  await editor.getByText('Maloo Inspection Report',{exact:true}).first().waitFor();
+ assert.equal(await editor.getByText('Maloo Inspection Report',{exact:true}).count(),3,'Toolbar and both pages show the report title');
  const input=editor.locator('textarea').filter({hasText:'Copied handover comments'});
  await input.fill('Edited inspection report only');
  await editor.getByRole('button',{name:'Save inspection report',exact:true}).click();

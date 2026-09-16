@@ -2718,6 +2718,13 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
     );
   };
 
+  // Use the same title typography for handovers and inspection reports on both pages.
+  const renderIPhoneDocumentTitle = () => (
+    <View pointerEvents="none" style={[styles.iPhoneDocumentTitlePatch, phoneFormBoxStyle({left: 450, top: 67, width: 290, height: 27})]}>
+      <Text style={styles.iPhoneDocumentTitleText} numberOfLines={1}>{companyFormTitle(company.id, documentName)}</Text>
+    </View>
+  );
+
   const renderIPhoneDocumentForm = () => (
     <View style={styles.iPhoneDocumentForm}>
       <View style={[styles.iPhonePageSlot, {height: phonePageAvailableHeight}]}>
@@ -2728,9 +2735,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
             ? {uri: '/scaffold-forms/phone-page-1-maloo.png'}
             : {uri: '/scaffold-forms/phone-page-1.png'},
           <>
-            {isInspectionReport ? <View pointerEvents="none" style={[phoneFormBoxStyle({left: 490, top: 67, width: 250, height: 27}), {backgroundColor: '#FFFFFF', zIndex: 2, justifyContent: 'center', alignItems: 'flex-end'}]}>
-              <Text style={{color: '#111111', fontSize: 16, fontWeight: '700'}}>{companyFormTitle(company.id, documentName)}</Text>
-            </View> : null}
+            {renderIPhoneDocumentTitle()}
             <View
               pointerEvents="none"
               style={[
@@ -2816,6 +2821,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
             ? {uri: '/scaffold-forms/phone-page-2-maloo.png'}
             : {uri: '/scaffold-forms/phone-page-2.png'},
           <>
+            {renderIPhoneDocumentTitle()}
             {renderIPhonePhotos()}
             <View
               pointerEvents="none"
@@ -3745,6 +3751,12 @@ function makeStyles(theme: ReturnType<typeof getTheme>, isWide: boolean) {
       fontWeight: '700',
       textAlign: 'center',
       paddingHorizontal: 1,
+    },
+    iPhoneDocumentTitlePatch: {
+      backgroundColor: '#FFFFFF', zIndex: 2, justifyContent: 'center', alignItems: 'flex-end',
+    },
+    iPhoneDocumentTitleText: {
+      fontFamily: 'Arial', fontSize: 18, fontWeight: '700', color: '#111111', includeFontPadding: false,
     },
     iPhoneInspectionLabelPatch: {
       zIndex: 1,
