@@ -1,14 +1,17 @@
 -- Run after the migration; all fixture changes are rolled back.
 begin;
 do $$
-declare b text; p text; tag_payload jsonb; source_payload jsonb; report public.ess_safety_forms%rowtype; c int;
+declare b text; p text; tag_payload jsonb; source_payload jsonb; report public.ess_safety_forms%rowtype; c int; initial_counter bigint; handover_counters jsonb;
 begin
+ select last_value into initial_counter from public.ess_inspection_report_counter where singleton;
+ select jsonb_agg(t) into handover_counters from public.ess_handover_inspection_counters t;
  select builder_id,id into b,p from public.ess_site_projects limit 1;
  source_payload := jsonb_build_object('scaffoldRegisterId','test-monthly-scaffold','scaffTagFormId','test-monthly-tag','companyEntityId','maloo','inspectionNumber','TEST','formReferenceName','Test original','inspectionDateTime','01/09/2026 09:00 am','checklist',jsonb_build_object('test','YES'),'clientSignatureStrokes','[[{"x":1,"y":2}]]'::jsonb,'photoSlots','[{"slot":0,"path":"do-not-copy.jpg"}]'::jsonb);
  insert into public.ess_safety_forms(form_type,id,builder_id,project_id,payload) values('handover-certificates','test-monthly-handover',b,p,source_payload);
  tag_payload := jsonb_build_object('handoverFormId','test-monthly-handover','scaffoldRegisterId','test-monthly-scaffold','inspectionRecords','[{"date":"2026-12-16","time":"10:30 am","competentPerson":"Sample Inspector","inspectedAt":"2026-12-16T00:30:00Z"}]'::jsonb);
  insert into public.ess_safety_forms(form_type,id,builder_id,project_id,payload) values('scaff-tags','test-monthly-tag',b,p,tag_payload);
  select * into report from public.ess_safety_forms where form_type='inspection-reports' and payload->>'sourceScaffTagId'='test-monthly-tag';
+ if report.reference_number <> lpad((initial_counter+1)::text,4,'0') or report.payload->>'inspectionNumber' <> report.reference_number then raise exception 'Report did not receive independent number'; end if;
  if report.id is null then raise exception 'First row did not create report'; end if;
  if report.payload->>'inspectionDateTime' <> '16/12/2026 10:30 am' then raise exception 'Wrong inspection time'; end if;
  if report.title <> 'December 16/12/2026 Inspection Report' then raise exception 'Wrong title: %',report.title; end if;
@@ -18,6 +21,7 @@ begin
  update public.ess_safety_forms set payload=tag_payload where form_type='scaff-tags' and id='test-monthly-tag';
  select count(*) into c from public.ess_safety_forms where form_type='inspection-reports' and payload->>'sourceScaffTagId'='test-monthly-tag';
  if c<>1 then raise exception 'Duplicate on retry'; end if;
+ if (select last_value from public.ess_inspection_report_counter where singleton) <> initial_counter+1 then raise exception 'Retry consumed a number'; end if;
  if (select payload->>'comments' from public.ess_safety_forms where form_type='inspection-reports' and id=report.id) <> 'independent edit' then raise exception 'Report edits overwritten'; end if;
  tag_payload := jsonb_set(tag_payload,'{inspectionRecords}',(tag_payload->'inspectionRecords')||'[{"date":"16/01/2027","time":"11:30 am","competentPerson":"Sample Inspector","inspectedAt":"2027-01-16T00:30:00Z"},{"date":"2027-02-16","time":"12:30 pm","competentPerson":"Sample Inspector","inspectedAt":"2027-02-16T01:30:00Z"},{"date":"2027-03-16","time":"1:30 pm","competentPerson":"Sample Inspector","inspectedAt":"2027-03-16T02:30:00Z"},{"date":"2027-04-16","time":"","competentPerson":""}]'::jsonb);
  update public.ess_safety_forms set payload=tag_payload where form_type='scaff-tags' and id='test-monthly-tag';
@@ -29,6 +33,10 @@ begin
  insert into public.ess_safety_forms(form_type,id,builder_id,project_id,payload) values('handover-certificates','test-monthly-late-handover',b,p,source_payload||'{"scaffoldRegisterId":"test-monthly-late-scaffold","scaffTagFormId":"test-monthly-late-tag"}'::jsonb);
  select count(*) into c from public.ess_safety_forms where form_type='inspection-reports' and payload->>'sourceScaffTagId'='test-monthly-late-tag';
  if c<>4 then raise exception 'Late handover did not create reports'; end if;
+ if (select last_value from public.ess_inspection_report_counter where singleton) <> initial_counter+8 then raise exception 'Expected eight independently numbered reports'; end if;
+ update public.ess_safety_forms set reference_number='9999',payload=payload||'{"inspectionNumber":"9999"}'::jsonb where form_type='inspection-reports' and id=report.id;
+ if (select reference_number from public.ess_safety_forms where form_type='inspection-reports' and id=report.id) <> report.reference_number then raise exception 'Edit changed report number'; end if;
+ if (select jsonb_agg(t) from public.ess_handover_inspection_counters t) is distinct from handover_counters then raise exception 'Report creation changed handover counter'; end if;
  -- Editing an identified inspection must not generate another report.
  select payload into tag_payload from public.ess_safety_forms where form_type='scaff-tags' and id='test-monthly-tag';
  tag_payload := jsonb_set(tag_payload,'{inspectionRecords,0,date}','"2026-12-17"'::jsonb);

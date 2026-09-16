@@ -1277,8 +1277,8 @@ export async function saveHandoverCertificateForm(
       photoPaths: nextForm.photoSlots.map(item => item.path),
     },
   );
-  nextForm = {...nextForm, inspectionDateTime: stored.inspectionDateTime, dateManuallySet: stored.dateManuallySet, updatedAt: stored.updatedAt};
-  const nextPdfBody = pdfBlob && nextForm.inspectionDateTime === input.inspectionDateTime
+  nextForm = {...nextForm, inspectionNumber: stored.inspectionNumber, inspectionDateTime: stored.inspectionDateTime, dateManuallySet: stored.dateManuallySet, updatedAt: stored.updatedAt};
+  const nextPdfBody = pdfBlob && nextForm.inspectionNumber === input.inspectionNumber && nextForm.inspectionDateTime === input.inspectionDateTime
     ? pdfBlob : await buildHandoverCertificatePdfBody(nextForm);
   await uploadObject(pdfPath, nextPdfBody, 'application/pdf');
   if (!isReport) await refreshLinkedScaffoldDateDocuments('handover-certificates', nextForm);
