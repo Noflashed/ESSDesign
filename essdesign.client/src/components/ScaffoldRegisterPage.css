@@ -804,7 +804,7 @@
 .scaffold-card-document > svg { grid-column:1; grid-row:1; }
 .scaffold-card-document > span:first-of-type { grid-column:2; grid-row:1; }
 .scaffold-card-document .scaffold-register-add-cell { grid-column:3; grid-row:1; margin-left:0; }
-.scaffold-card-document .scaffold-register-document-link { grid-column:4; grid-row:1; max-width:100%; width:100%; text-align:left; }
+.scaffold-card-document .scaffold-register-document-link { grid-column:4; grid-row:1; max-width:100%; width:100%; text-align:right; }
 .scaffold-card-documents { display:grid; grid-template-columns:16px max-content 24px minmax(0,1fr); column-gap:9px; }
 .scaffold-card-document { grid-column:1 / -1; grid-template-columns:subgrid; }
 :root[data-theme="dark"] .scaffold-register-page { background:var(--bg-primary); }
