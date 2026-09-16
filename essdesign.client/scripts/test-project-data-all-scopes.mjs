@@ -43,6 +43,12 @@ try {
     Math.abs(logo.y + logo.height / 2 - bounds.y - bounds.height / 2) < 2,
   );
   await count(3);
+  const actionText = await page.locator('.pf-create-card strong').evaluateAll(elements => elements.map(element => {
+    const style = getComputedStyle(element);
+    return [style.fontFamily, style.fontSize, style.fontWeight];
+  }));
+  for (const style of actionText) assert.deepEqual(style, ['-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif', '12px', '600']);
+
   const scopeWidths = await page.locator('.pf-scope .scaffold-register-dropdown').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().width));
   assert.deepEqual(scopeWidths, [320, 360], 'Builder and Project retain their wider desktop widths');
 
