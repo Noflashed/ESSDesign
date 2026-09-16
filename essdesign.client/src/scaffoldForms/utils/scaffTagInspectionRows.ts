@@ -34,3 +34,15 @@ export function previousInspectionSignature(
     ?? (initialInspector.trim().toLowerCase() === name ? initialSignature : []);
   return strokes.map(stroke => stroke.map(point => ({...point})));
 }
+
+
+export function removeInspectionRow(records: InspectionRecordEntry[], index: number): InspectionRecordEntry[] {
+  if (index < 0 || index >= records.length) { return records; }
+  const remaining = records.filter((_row, rowIndex) => rowIndex !== index);
+  while (remaining.length > 10) {
+    const last = remaining[remaining.length - 1];
+    if (last.date || last.time || last.competentPerson || last.note || last.inspectedAt || last.signatureStrokes?.some(stroke => stroke.length)) { break; }
+    remaining.pop();
+  }
+  return inspectionTableRows(remaining);
+}

@@ -1,5 +1,5 @@
 import ScaffTagTableScroll from '../components/ScaffTagTableScroll';
-import {inspectionTableRows, complianceTableRows, previousInspectionSignature} from '../utils/scaffTagInspectionRows';
+import {inspectionTableRows, complianceTableRows, previousInspectionSignature, removeInspectionRow} from '../utils/scaffTagInspectionRows';
 import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/screens/ScaffTagFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
 import React from 'react';
@@ -631,6 +631,23 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
     });
   };
 
+  const confirmRemoveInspection = (index: number) => {
+    if (isReadOnly) { return; }
+    const row = form.inspectionRecords[index];
+    if (!row || !inspectionRowHasContent(row)) { return; }
+    Alert.alert(
+      'Remove inspection?',
+      `Remove inspection ${index + 1}${row.date ? ` (${formatScaffoldDate(row.date)})` : ''}, including its signature and compliance note? Save the Scaff-Tag to apply this change.`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {text: 'Remove', style: 'destructive', onPress: () => {
+          setForm(previous => ({...previous, inspectionRecords: removeInspectionRow(previous.inspectionRecords, index)}));
+          setInspectionSignaturePreviewSizes({});
+        }},
+      ],
+    );
+  };
+
   const autofillInspectionRow = (index: number) => {
     if (isReadOnly) {
       return;
@@ -1169,8 +1186,12 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                     const isActive = inspectionRowHasContent(row);
                     return (
                       <View key={`front-auth-${index}`} style={styles.authorisedTableRow}>
-                        <View
+                        <Pressable
                           collapsable={false}
+                          disabled={isReadOnly || !isActive}
+                          onLongPress={() => confirmRemoveInspection(index)}
+                          delayLongPress={600}
+                          accessibilityHint={isReadOnly || !isActive ? undefined : 'Long press to remove this inspection'}
                           style={[styles.authCellButton, styles.authDateCell]}>
                           {!row.date && index === nextInspectionIndex && !isReadOnly ? (
                             <TouchableOpacity
@@ -1185,7 +1206,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                           ) : (
                             <Text style={styles.authCellText}>{formatScaffoldDate(row.date || '')}</Text>
                           )}
-                        </View>
+                        </Pressable>
                         <View style={[styles.authInput, styles.authTimeCell, styles.authTimeValueCell]}>
                           <Text style={styles.authCellText}>{row.time || ''}</Text>
                         </View>
@@ -1203,6 +1224,9 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                           disabled={isReadOnly || !isActive}
                           style={[styles.authSignatureButton, styles.authSignatureCell]}
                           onPress={() => openSignatureModal({type: 'inspection', index})}
+                          onLongPress={() => confirmRemoveInspection(index)}
+                          delayLongPress={600}
+                          accessibilityHint={isReadOnly || !isActive ? undefined : 'Tap to edit the signature. Long press to remove this inspection.'}
                           onLayout={evt => {
                             const size = readLayoutSize(evt);
                             if (size.width <= 0 || size.height <= 0) {
@@ -1225,6 +1249,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                               )
                             : null}
                         </TouchableOpacity>
+
                       </View>
                     );
                   })}
