@@ -546,10 +546,9 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
   const page: string[] = ['1 w', lineColor, dark];
 
   page.push(drawImage('Logo', margin + 4, pageH - 113, 96, 54));
-  page.push(drawText(margin + 116, pageH - 70, 10.5, company.legalName, 'F2'));
-  page.push(drawText(margin + 116, pageH - 84, 10.5, `ABN: ${company.abn}`));
-  page.push(drawText(margin + 116, pageH - 98, 10.5, `Office Address: ${company.officeAddress}`));
-  page.push(drawText(margin + 116, pageH - 112, 10.5, `PH: ${company.phone}   FAX: ${company.fax}`));
+  page.push(drawText(margin + 116, pageH - 84, 10.5, company.legalName, 'F2'));
+  page.push(drawText(margin + 116, pageH - 98, 10.5, `ABN: ${company.abn}`));
+  page.push(drawText(margin + 116, pageH - 112, 10.5, `Office Address: ${company.officeAddress}`));
   page.push(drawText(pageW - margin - 252, pageH - 78, 19, companyFormTitle(company.id, 'Variation / Day Labour'), 'F2'));
   page.push(red);
   page.push(drawText(pageW - margin - 202, pageH - 112, 14, 'VARIATION NO. A', 'F2'));

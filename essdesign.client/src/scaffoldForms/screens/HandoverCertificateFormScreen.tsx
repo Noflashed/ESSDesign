@@ -1761,7 +1761,6 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
             <Text style={activeStyles.brandText}>{company.legalName}</Text>
             <Text style={activeStyles.brandSubText}>ABN: {company.abn}</Text>
             <Text style={activeStyles.brandSubText}>Office Address: {company.officeAddress}</Text>
-            <Text style={activeStyles.brandSubText}>PH: {company.phone}   FAX: {company.fax}</Text>
           </View>
         </View>
         <View style={activeStyles.headerRight}>
@@ -2116,7 +2115,6 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
             <Text style={activeStyles.brandText}>{company.legalName}</Text>
             <Text style={activeStyles.brandSubText}>ABN: {company.abn}</Text>
             <Text style={activeStyles.brandSubText}>Office Address: {company.officeAddress}</Text>
-            <Text style={activeStyles.brandSubText}>PH: {company.phone}   FAX: {company.fax}</Text>
           </View>
         </View>
       </View>
@@ -2719,6 +2717,14 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
   };
 
   // Use the same title typography for handovers and inspection reports on both pages.
+  const renderIPhoneCompanyDetails = () => (
+    <View pointerEvents="none" style={[phoneFormBoxStyle({left: 174, top: 77, width: 255, height: 48}), {backgroundColor: '#FFFFFF', justifyContent: 'flex-end', paddingLeft: 1, paddingBottom: 3}]}>
+      <Text style={styles.iPhoneCompanyDetailText}>{company.legalName}</Text>
+      <Text style={styles.iPhoneCompanyDetailText}>ABN: {company.abn}</Text>
+      <Text style={styles.iPhoneCompanyDetailText}>Office Address: {company.officeAddress}</Text>
+    </View>
+  );
+
   const renderIPhoneDocumentTitle = () => (
     <View pointerEvents="none" style={[styles.iPhoneDocumentTitlePatch, phoneFormBoxStyle({left: 450, top: 67, width: 290, height: 27})]}>
       <Text style={styles.iPhoneDocumentTitleText} numberOfLines={1}>{companyFormTitle(company.id, documentName)}</Text>
@@ -2735,6 +2741,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
             ? {uri: '/scaffold-forms/phone-page-1-maloo.png'}
             : {uri: '/scaffold-forms/phone-page-1.png'},
           <>
+            {renderIPhoneCompanyDetails()}
             {renderIPhoneDocumentTitle()}
             <View
               pointerEvents="none"
@@ -2821,6 +2828,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
             ? {uri: '/scaffold-forms/phone-page-2-maloo.png'}
             : {uri: '/scaffold-forms/phone-page-2.png'},
           <>
+            {renderIPhoneCompanyDetails()}
             {renderIPhoneDocumentTitle()}
             {renderIPhonePhotos()}
             <View
@@ -3752,6 +3760,7 @@ function makeStyles(theme: ReturnType<typeof getTheme>, isWide: boolean) {
       textAlign: 'center',
       paddingHorizontal: 1,
     },
+    iPhoneCompanyDetailText: {fontFamily: 'Arial', fontSize: 8, lineHeight: 10, color: '#222222'},
     iPhoneDocumentTitlePatch: {
       backgroundColor: '#FFFFFF', zIndex: 2, justifyContent: 'center', alignItems: 'flex-end',
     },
@@ -4393,6 +4402,7 @@ function makeStyles(theme: ReturnType<typeof getTheme>, isWide: boolean) {
       maxWidth: isWide ? '80%' : '100%',
     },
     brandTextWrap: {
+      paddingTop: 12,
       flex: 1,
       flexShrink: 1,
       minWidth: 0,

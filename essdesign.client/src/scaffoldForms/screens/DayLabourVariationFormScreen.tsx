@@ -2009,7 +2009,6 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
                   <Text style={styles.pdfCompanyText}>{company.legalName}</Text>
                   <Text style={styles.pdfCompanyText}>ABN: {company.abn}</Text>
                   <Text style={styles.pdfCompanyText}>Office Address: {company.officeAddress}</Text>
-                  <Text style={styles.pdfCompanyText}>PH: {company.phone}   FAX: {company.fax}</Text>
                 </View>
               </View>
               <View style={styles.pdfTitleBlock}>
@@ -2855,7 +2854,7 @@ function makeStyles(theme: ReturnType<typeof getTheme>, isWide: boolean, isPhone
     },
     pdfBrand: {flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10},
     pdfLogo: {width: isWide ? 126 : 92, height: isWide ? 60 : 48},
-    pdfCompanyBlock: {flex: 1, minWidth: 0},
+    pdfCompanyBlock: {flex: 1, minWidth: 0, paddingTop: 12},
     pdfCompanyText: {fontSize: isWide ? 12 : 9, lineHeight: isWide ? 15 : 12, color: '#222222', fontWeight: '500'},
     pdfTitleBlock: {width: isWide ? 340 : 210, alignItems: 'flex-end', justifyContent: 'center', gap: 12},
     pdfTitle: {width: '100%', fontSize: isWide ? 20 : 16, lineHeight: isWide ? 30 : 19, color: '#000000', fontWeight: '900', textAlign: 'right'},

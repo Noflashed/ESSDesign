@@ -644,10 +644,9 @@ export async function buildHandoverCertificatePdfBody(form: HandoverCertificateF
   ) => {
     target.push(canvas.image('Logo', 65, 50, 112, 62));
     target.push(dark);
-    target.push(canvas.text(181, 69, 7.4, company.legalName));
-    target.push(canvas.text(181, 80, 7.4, `ABN: ${company.abn}`));
-    target.push(canvas.text(181, 91, 7.4, `Office Address: ${company.officeAddress}`));
-    target.push(canvas.text(181, 102, 7.4, `PH: ${company.phone}   FAX: ${company.fax}`));
+    target.push(canvas.text(181, 80, 7.4, company.legalName));
+    target.push(canvas.text(181, 91, 7.4, `ABN: ${company.abn}`));
+    target.push(canvas.text(181, 102, 7.4, `Office Address: ${company.officeAddress}`));
     target.push(canvas.rightText(744, 72, 15, companyFormTitle(company.id, form.documentKind === 'inspection-report' ? 'Inspection Report' : 'Handover Certificate'), 'F2'));
     if (!withInspection) {
       return;
