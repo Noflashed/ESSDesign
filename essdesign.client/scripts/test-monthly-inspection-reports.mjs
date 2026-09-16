@@ -7,10 +7,18 @@ page.on('pageerror',error=>errors.push(error.message));
 try {
  await page.goto(`${process.env.TEST_BASE_URL || 'http://127.0.0.1:5182'}/tests/fixtures/scaffold-register-cards.html`);
  await page.locator('.monthly-reports-link').first().click();
- await page.locator('.monthly-report-card').first().waitFor();
- assert.equal(await page.locator('.monthly-report-card').count(),4);
- assert.equal(await page.locator('.monthly-report-card strong').last().innerText(),'December 2026 Inspection Report');
- assert.equal(await page.locator('.monthly-report-card small').last().innerText(),'16/12/2026 9:30 am');
+ await page.locator('.monthly-report-row').first().waitFor();
+ assert.equal(await page.locator('.monthly-report-row').count(),4);
+ assert.equal(await page.locator('.monthly-report-row strong').first().innerText(),'December 2026 Inspection Report');
+ assert.equal(await page.locator('.monthly-report-date').first().innerText(),'16/12/2026\n9:30 am');
+ await page.getByRole('searchbox',{name:'Search inspection reports'}).fill('November');
+ assert.equal(await page.locator('.monthly-report-row').count(),1);
+ await page.getByRole('searchbox',{name:'Search inspection reports'}).fill('no match');
+ await page.getByText('No matching reports',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Clear search',exact:true}).click();
+ await page.getByRole('combobox',{name:'Sort inspection reports'}).selectOption('oldest');
+ assert.equal(await page.locator('.monthly-report-row strong').first().innerText(),'September 2026 Inspection Report');
+ await page.getByRole('combobox',{name:'Sort inspection reports'}).selectOption('newest');
  for(const width of [1440,1024,390]) {
   await page.setViewportSize({width,height:1000});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Report list fits viewport');

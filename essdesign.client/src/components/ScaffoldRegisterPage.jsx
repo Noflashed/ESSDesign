@@ -743,6 +743,7 @@ export default function ScaffoldRegisterPage({
 
     return (
         <main className="scaffold-register-page">
+            {!reportsItem && <>
             <section className="scaffold-register-toolbar" inert={editor ? "" : undefined} aria-hidden={Boolean(editor)} aria-label="Scaffold Register filters">
                 <div className="scaffold-register-dropdowns">
                     <RegisterDropdown
@@ -806,6 +807,7 @@ export default function ScaffoldRegisterPage({
                 </button>
             </div>
 
+            </>}
             {error ? <div className="scaffold-register-error" role="alert">{error}</div> : null}
 
             <section inert={editor ? "" : undefined} aria-hidden={Boolean(editor)} className={`scaffold-register-cards-wrap${recordsLoading || buildersLoading ? ' is-loading' : ''}`}>
