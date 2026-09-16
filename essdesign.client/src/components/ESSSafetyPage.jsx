@@ -974,7 +974,7 @@ export default function ESSSafetyPage() {
 
                 <section className="project-data-workspace">
                     <div className="project-data-main-panel">
-                        <div className={`project-data-table-card${hasSeparateSharing ? ' has-form-sharing' : sharingReplacesStatus ? ' sharing-only' : ''}`}>
+                        <div className={`project-data-table-card${hasSeparateSharing ? ' has-form-sharing' : sharingReplacesStatus ? ' sharing-only' : ''}${sharingBeforeStatus ? ' handover-actions-last' : ''}`}>
                             <div className="project-data-table-head">
                                 <span className="project-data-checkbox" aria-hidden="true" />
                                 <span>Document name</span>
@@ -1000,8 +1000,9 @@ export default function ESSSafetyPage() {
                                         ))}
                                     </TableHeaderFilter>
                                 </span>
+                                {sharingBeforeStatus && <span>{statusHeader}</span>}
                                 <span />
-                                {hasSeparateSharing && (sharingBeforeStatus ? <span>{statusHeader}</span> : <span className="project-data-sharing-cell">Form Shared</span>)}
+                                {hasSeparateSharing && !sharingBeforeStatus && <span className="project-data-sharing-cell">Form Shared</span>}
                                 {sharingReplacesStatus && <span className="project-data-sharing-cell">{statusHeader}</span>}
                             </div>
 
@@ -1049,6 +1050,7 @@ export default function ESSSafetyPage() {
                                             {sharingBeforeStatus ? <span className="project-data-sharing-cell"><FormSharedCheckbox form={document.raw} /></span> : !sharingReplacesStatus && <span><StatusChip status={document.status} /></span>}
                                             <span>{formatDate(document.uploadedAt)}</span>
                                             <span>{document.uploadedBy}</span>
+                                            {sharingBeforeStatus && <span><StatusChip status={document.status} /></span>}
                                             <span
                                                 className="project-data-row-actions"
                                                 role="button"
@@ -1063,7 +1065,7 @@ export default function ESSSafetyPage() {
                                             >
                                                 <MoreVertical size={17} />
                                             </span>
-                                            {(hasSeparateSharing || sharingReplacesStatus) && (sharingBeforeStatus ? <span><StatusChip status={document.status} /></span> : <span className="project-data-sharing-cell"><FormSharedCheckbox form={document.raw} /></span>)}
+                                            {(hasSeparateSharing || sharingReplacesStatus) && !sharingBeforeStatus && <span className="project-data-sharing-cell"><FormSharedCheckbox form={document.raw} /></span>}
                                         </button>
                                     ))}
                                 </div>

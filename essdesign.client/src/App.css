@@ -25339,6 +25339,11 @@ button.stat-card {
 }
 .project-data-table-card.has-form-sharing { overflow-x: auto; }
 
+.project-data-table-card.handover-actions-last .project-data-table-head,
+.project-data-table-card.handover-actions-last .project-data-table-row {
+    grid-template-columns: 28px minmax(180px, 1.55fr) minmax(100px, .75fr) minmax(90px, .58fr) minmax(100px, .66fr) minmax(110px, .72fr) 100px 28px;
+}
+
 .project-data-table-card.sharing-only .project-data-table-head,
 .project-data-table-card.sharing-only .project-data-table-row {
     grid-template-columns: 28px minmax(180px, 1.55fr) minmax(100px, .75fr) minmax(100px, .66fr) minmax(110px, .72fr) 28px 100px;
