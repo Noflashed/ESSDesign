@@ -1,4 +1,38 @@
 /* Small visual refinements to the approved Project data layout. */
+.project-files-page .pf-search input:focus,
+.project-files-page .pf-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.project-files-page .pf-search:focus-within {
+  box-shadow: none;
+}
+
+.project-files-page .pf-badge[tabindex] {
+  cursor: help;
+}
+
+.project-files-page .pf-badge:focus-visible {
+  outline: 1px solid var(--text-secondary, #667085);
+  outline-offset: 3px;
+}
+
+.pf-badge-tooltip {
+  position: fixed;
+  z-index: 1000;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border-radius: 7px;
+  background: #24282e;
+  color: #fff;
+  box-shadow: 0 4px 12px #00000018;
+  font: 400 12px/18px "ESS Inter", Inter, sans-serif;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+}
+
 .project-files-page .pf-create-card {
   background: color-mix(in srgb, var(--bg-secondary, #f1f3f4) 45%, var(--card-bg, #fff)) !important;
 }

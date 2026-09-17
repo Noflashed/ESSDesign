@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -123,10 +124,52 @@ function ProfileAvatar({ name, src }) {
     </span>
   );
 }
+const BADGE_DESCRIPTIONS = {
+  Active: "The scaffold is currently erected and on-site.",
+  Shared: "This form has been shared with an internal or external user.",
+  "Form Shared": "This form has been shared with an internal or external user.",
+  "Not shared": "This form has not been shared with an internal or external user.",
+  "Not Shared": "This form has not been shared with an internal or external user.",
+};
+
 function Badge({ value }) {
+  const description = BADGE_DESCRIPTIONS[value];
+  const tooltipId = useId();
+  const [position, setPosition] = useState(null);
+  const showTooltip = (event) => {
+    if (!description) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const width = Math.min(260, window.innerWidth - 24);
+    setPosition({
+      left: Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - 12)),
+      top: rect.top > 90 ? rect.top - 8 : rect.bottom + 8,
+      above: rect.top > 90,
+      width,
+    });
+  };
+  useEffect(() => {
+    if (!position) return undefined;
+    const close = () => setPosition(null);
+    const onKeyDown = (event) => { if (event.key === "Escape") close(); };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [position]);
   return (
+    <>
     <span
       className={`pf-badge pf-${String(value).toLowerCase().replaceAll(" ", "-")}`}
+      tabIndex={description ? 0 : undefined}
+      aria-describedby={position ? tooltipId : undefined}
+      onMouseEnter={showTooltip}
+      onMouseLeave={() => setPosition(null)}
+      onFocus={showTooltip}
+      onBlur={() => setPosition(null)}
     >
       {["Active", "Current", "Shared"].includes(value) ? (
         <Check size={12} />
@@ -135,6 +178,14 @@ function Badge({ value }) {
       )}{" "}
       {value}
     </span>
+    {position && createPortal(
+      <span id={tooltipId} role="tooltip" className="pf-badge-tooltip"
+        style={{ left: position.left, top: position.top, width: position.width,
+          transform: position.above ? "translateY(-100%)" : undefined }}>
+        {description}
+      </span>, document.body,
+    )}
+    </>
   );
 }
 function Modal({ title, children, onClose }) {
