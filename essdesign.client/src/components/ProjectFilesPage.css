@@ -516,12 +516,12 @@
 }
 .pf-active,
 .pf-current {
-  color: #527f9d;
-  background: #edf4f9;
+  color: #247044;
+  background: #edf7ef;
 }
 .pf-not-shared {
-  color: #9e875d;
-  background: #faf5eb;
+  color: #667085;
+  background: #f4f5f6;
 }
 .pf-expired {
   color: #b36557;
@@ -904,12 +904,9 @@
   transform: rotate(-4deg);
 }
 .pf-create-card > svg {
-  transition:
-    transform 180ms ease,
-    color 180ms ease;
+  transition: color 180ms ease;
 }
 .pf-create-card:hover > svg {
-  transform: rotate(90deg);
   color: var(--text-primary, #333);
 }
 .pf-recent-card:hover > svg,

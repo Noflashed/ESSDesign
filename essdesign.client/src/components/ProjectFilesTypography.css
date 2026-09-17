@@ -1,0 +1,104 @@
+@font-face {
+  font-family: "ESS Inter";
+  src: url("../assets/fonts/InterVariable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+/* Keep the approved layout; apply the reference's type system to this page. */
+.project-files-page.project-files-page,
+.pf-modal.pf-modal,
+.pf-context-menu.pf-context-menu,
+.App:has(.project-files-page) .app-nav-sidebar {
+  font-family: "ESS Inter", Inter, "Segoe UI", Arial, sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+}
+
+.project-files-page .pf-create-card,
+.project-files-page .pf-scope .scaffold-register-dropdown-trigger,
+.project-files-page .scaffold-register-dropdown-menu > button {
+  font-family: inherit;
+}
+
+.project-files-page .pf-create-card strong {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.project-files-page .pf-recent h2 {
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.project-files-page .pf-recent-card strong {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.project-files-page .pf-recent-card small,
+.project-files-page .pf-recent-card small:first-of-type {
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 400;
+}
+
+.project-files-page .pf-tabs button,
+.project-files-page .pf-filter-button,
+.project-files-page .pf-search input,
+.project-files-page .pf-scope .scaffold-register-dropdown-trigger,
+.project-files-page .scaffold-register-dropdown-menu > button {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.project-files-page .pf-table-area th {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+.project-files-page .pf-table-area td {
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.project-files-page .pf-document strong {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.project-files-page .pf-document small {
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 400;
+}
+
+.project-files-page .pf-badge {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 400;
+}
+
+.project-files-page .pf-avatar {
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/* Allow the scope controls to absorb the wider font on desktop. */
+@media (min-width: 1400px) {
+  .project-files-page .pf-scope {
+    flex: 1 1 520px;
+    width: auto;
+  }
+}

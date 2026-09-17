@@ -53,6 +53,8 @@ import { RegisterDropdown } from "./ScaffoldRegisterPage";
 import ScaffoldFormEditor from "./ScaffoldFormEditor";
 import LoadingBrandmark from "./LoadingBrandmark";
 import "./ProjectFilesPage.css";
+import "./ProjectFilesTypography.css";
+import "./ProjectFilesPolish.css";
 
 const TYPES = [
   {

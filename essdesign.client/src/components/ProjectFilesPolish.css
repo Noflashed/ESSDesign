@@ -1,0 +1,109 @@
+/* Small visual refinements to the approved Project data layout. */
+.project-files-page .pf-create-card {
+  background: color-mix(in srgb, var(--bg-secondary, #f1f3f4) 45%, var(--card-bg, #fff)) !important;
+}
+
+.project-files-page .pf-tabs button[aria-pressed="true"] {
+  font-weight: 600;
+  border-color: color-mix(in srgb, var(--border-color, #e8eaed) 75%, var(--text-secondary, #5f6368));
+}
+
+.project-files-page .pf-tabs {
+  padding: 2px;
+}
+
+.project-files-page .pf-tabs button {
+  padding: 5px 8px;
+}
+
+.project-files-page .pf-filter-button,
+.project-files-page .pf-search,
+.project-files-page .pf-scope .scaffold-register-dropdown-trigger {
+  height: 30px;
+  min-height: 30px;
+}
+
+.project-files-page .pf-search,
+.project-files-page .pf-filter-button {
+  padding: 0 8px;
+  gap: 6px;
+}
+
+.project-files-page .pf-scope .scaffold-register-dropdown-trigger {
+  grid-template-columns: 22px minmax(0, 1fr) 12px;
+  gap: 5px;
+  padding: 0 8px 0 6px;
+}
+
+.project-files-page .pf-scope .scaffold-register-builder-logo {
+  width: 22px;
+  height: 20px;
+  font-size: 9px;
+}
+
+.project-files-page .pf-search > svg,
+.project-files-page .pf-filter-button > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.project-files-page {
+  --pf-muted-copy: #667085;
+  --pf-row-hover: #fafbfc;
+  --pf-row-selected: #f0f6f2;
+}
+
+.project-files-page .pf-table-area th {
+  background: color-mix(in srgb, var(--bg-secondary, #f1f3f4) 45%, var(--card-bg, #fff));
+}
+
+.project-files-page .pf-document small,
+.project-files-page .pf-recent-card small {
+  color: var(--pf-muted-copy);
+}
+
+.project-files-page .pf-table-row {
+  transition: background-color 120ms ease;
+}
+
+.project-files-page .pf-table-row:hover,
+.project-files-page .pf-table-row:focus-within {
+  background: var(--pf-row-hover);
+}
+
+.project-files-page .pf-table-row.pf-selected {
+  background: var(--pf-row-selected);
+}
+
+.project-files-page .pf-table-row.pf-selected td:first-child {
+  box-shadow: inset 2px 0 #247044;
+}
+
+.project-files-page .pf-row-actions:hover {
+  background: var(--bg-secondary, #f1f3f4);
+}
+
+@media (min-width: 1100px) {
+  .project-files-page .pf-table-area .pf-with-status th:nth-child(2) { width: 13%; }
+  .project-files-page .pf-table-area .pf-with-status th:nth-child(3) { width: 19%; }
+  .project-files-page .pf-table-area .pf-with-status th:nth-child(4) { width: 12%; }
+  .project-files-page .pf-table-area .pf-with-status th:nth-child(5) { width: 11%; }
+  .project-files-page .pf-table-area .pf-without-status th:nth-child(2) { width: 14%; }
+  .project-files-page .pf-table-area .pf-without-status th:nth-child(3) { width: 22%; }
+  .project-files-page .pf-table-area .pf-without-status th:nth-child(4) { width: 14%; }
+}
+
+:root[data-theme="dark"] .project-files-page {
+  --pf-muted-copy: #aeb6c2;
+  --pf-row-hover: #292d30;
+  --pf-row-selected: #25392c;
+}
+
+:root[data-theme="dark"] .project-files-page .pf-not-shared {
+  background: #30343a;
+  color: #bdc4ce;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-files-page .pf-table-row { transition: none; }
+}
