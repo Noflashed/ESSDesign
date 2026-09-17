@@ -30,13 +30,11 @@ import {
   usersAPI,
   resolveProfileImageUrls,
   safetyProjectsAPI,
-  scaffTagsAPI,
   handoverCertificatesAPI,
   dayLabourVariationsAPI,
   preStartsAPI,
 } from "../services/api";
 import {
-  mapScaffTagRows,
   mapHandoverRows,
   mapDayLabourVariationRows,
   mapPreStartRows,
@@ -59,12 +57,6 @@ import "./ProjectFilesTypography.css";
 import "./ProjectFilesPolish.css";
 
 const TYPES = [
-  {
-    key: "scaff-tags",
-    label: "Scaff-tags",
-    api: scaffTagsAPI,
-    map: mapScaffTagRows,
-  },
   {
     key: "handover-certificates",
     label: "Handovers",
@@ -239,7 +231,7 @@ export default function ESSSafetyPage() {
     [error, setError] = useState("");
   const [builderId, setBuilderId] = useState(savedSelection.builderId || ALL_SCOPE),
     [projectId, setProjectId] = useState(savedSelection.projectId || ALL_SCOPE),
-    [kind, setKind] = useState(TYPES.some(type => type.key === savedSelection.kind) ? savedSelection.kind : "scaff-tags");
+    [kind, setKind] = useState(TYPES.some(type => type.key === savedSelection.kind) ? savedSelection.kind : TYPES[0].key);
   const [documents, setDocuments] = useState([]),
     [reload, setReload] = useState(0);
   const [query, setQuery] = useState(""),
@@ -524,8 +516,7 @@ export default function ESSSafetyPage() {
   useEffect(() => {
     if (menu) menuRef.current?.querySelector("button")?.focus();
   }, [menu]);
-  const hasStatus = ["scaff-tags", "handover-certificates"].includes(kind);
-  const hasDocumentNumber = kind !== "scaff-tags";
+  const hasStatus = kind === "handover-certificates";
   const documentNumber = (doc) => ({
     "handover-certificates": doc.raw.inspectionNumber,
     "day-labour-variations": doc.raw.variationNumber,
@@ -1003,7 +994,7 @@ export default function ESSSafetyPage() {
           </div>
         )}
         <div className="pf-table-area" ref={tableRef} aria-busy={busy}>
-          <table className={`${hasStatus ? "pf-with-status" : "pf-without-status"}${hasDocumentNumber ? " pf-with-document-number" : ""}`}>
+          <table className={`${hasStatus ? "pf-with-status" : "pf-without-status"} pf-with-document-number`}>
             <thead>
               <tr>
                 <th>
@@ -1033,10 +1024,10 @@ export default function ESSSafetyPage() {
                         )
                       }
                     />
-                    <span>{hasDocumentNumber ? "Document" : "Document / reference"}</span>
+                    <span>Document</span>
                   </div>
                 </th>
-                {hasDocumentNumber && <th>Document number</th>}
+                <th>Document number</th>
                 <th>
                   <button
                     onClick={() => {
@@ -1090,21 +1081,16 @@ export default function ESSSafetyPage() {
                           <strong title={doc.name}>{doc.name}</strong>
                           {specificSite ? (
                             <small>{doc.size || pdfSizes[`${doc.id}:${doc.uploadedAt}`] || "Loading size…"}</small>
-                          ) : hasDocumentNumber ? (
+                          ) : (
                             selectedProject?.isAll && <small title={doc.project.name}>{doc.project.name}</small>
-                          ) : <small title={`${doc.ref} · ${doc.project.name}`}>
-                            {doc.ref}
-                            {selectedProject?.isAll
-                              ? ` · ${doc.project.name}`
-                              : ""}
-                          </small>}
+                          )}
                         </span>
                       </button>
                     </div>
                   </td>
-                  {hasDocumentNumber && <td title={String(documentNumber(doc))}>
+                  <td title={String(documentNumber(doc))}>
                     {documentNumber(doc)}
-                  </td>}
+                  </td>
                   <td>{dateText(doc.uploadedAt)}</td>
                   <td>
                     <span className="pf-person">
