@@ -4,6 +4,7 @@ import DrawingRegisterPage from './components/DrawingRegisterPage';
 import ProjectDataRegisterPage from './components/ProjectDataRegisterPage';
 import ScaffoldDashboardPage from './components/ScaffoldDashboardPage';
 import { ACCOUNTS_NAV_ITEMS, resolveAccountsPage } from './utils/accountsAccess';
+import { resolveProjectDataPage, projectDataNavForRole } from './utils/projectDataAccess';
 import ScaffoldRegisterPage from './components/ScaffoldRegisterPage';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
@@ -697,7 +698,8 @@ function App() {
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [pageState, setCurrentPage] = useState('landing');
     const isAccounts = user?.role === 'accounts';
-    const currentPage = isAccounts ? resolveAccountsPage(pageState) : pageState;
+    const roleSafePage = resolveProjectDataPage(pageState, user?.role);
+    const currentPage = isAccounts ? resolveAccountsPage(roleSafePage) : roleSafePage;
     const [pendingAiQuestion, setPendingAiQuestion] = useState(null);
     const [showNavDrawer, setShowNavDrawer] = useState(false);
     const [avatarProfileUser, setAvatarProfileUser] = useState(null);
@@ -720,7 +722,7 @@ function App() {
     const isTruckDeviceUser = user?.role === 'truck_ess01' || user?.role === 'truck_ess02' || user?.role === 'truck_ess03';
     const hasTransportSuiteAccess = user?.role === 'admin' || isTransportManagement || isTruckDeviceUser;
     const showRosteringAndEmployees = user?.role === 'admin' || user?.role === 'viewer';
-    const allowedNavItems = isEmployeePortalRole
+    const baseNavItems = isEmployeePortalRole
         ? [{ key: 'employee-home', label: 'ESS App' }, { key: 'ess-ai', label: 'ESS AI' }]
         : isAccounts
         ? ACCOUNTS_NAV_ITEMS
@@ -754,6 +756,7 @@ function App() {
             ]),
             ...(user?.role === 'admin' ? [{ key: 'ess-news', label: 'ESS News' }] : []),
         ];
+    const allowedNavItems = projectDataNavForRole(baseNavItems, user?.role);
     const showHeaderSearch = false;
     const searchRef = useRef(null);
     const userMenuRef = useRef(null);

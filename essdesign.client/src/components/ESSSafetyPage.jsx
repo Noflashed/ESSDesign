@@ -60,18 +60,21 @@ const TYPES = [
   {
     key: "handover-certificates",
     label: "Handovers",
+    numberLabel: "Handover No.",
     api: handoverCertificatesAPI,
     map: mapHandoverRows,
   },
   {
     key: "day-labour-variations",
     label: "Day Labour / Variations",
+    numberLabel: "Day Labour/Variation No.",
     api: dayLabourVariationsAPI,
     map: mapDayLabourVariationRows,
   },
   {
     key: "pre-starts",
     label: "Pre-starts",
+    numberLabel: "Pre-Start No.",
     api: preStartsAPI,
     map: mapPreStartRows,
   },
@@ -1027,7 +1030,9 @@ export default function ESSSafetyPage() {
                     <span>Document</span>
                   </div>
                 </th>
-                <th>Document number</th>
+                <th title={TYPES.find((type) => type.key === kind).numberLabel}>
+                  {TYPES.find((type) => type.key === kind).numberLabel}
+                </th>
                 <th>
                   <button
                     onClick={() => {
