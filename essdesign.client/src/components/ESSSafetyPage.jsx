@@ -40,6 +40,7 @@ import {
   mapHandoverRows,
   mapDayLabourVariationRows,
   mapPreStartRows,
+  formatBytes,
 } from "../utils/projectDataDocuments";
 import {
   ALL_SCOPE,
@@ -221,13 +222,24 @@ function Modal({ title, children, onClose }) {
 }
 
 export default function ESSSafetyPage() {
+  const [selectionKey] = useState(() => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "null");
+      const id = user?.id || (import.meta.env.DEV ? "local-preview" : null);
+      return id ? `ess-project-data-selection-v1:${id}` : null;
+    } catch { return null; }
+  });
+  const [savedSelection] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(selectionKey) || "null") || {}; }
+    catch { return {}; }
+  });
   const [builders, setBuilders] = useState([]),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  const [builderId, setBuilderId] = useState(ALL_SCOPE),
-    [projectId, setProjectId] = useState(ALL_SCOPE),
-    [kind, setKind] = useState("scaff-tags");
+  const [builderId, setBuilderId] = useState(savedSelection.builderId || ALL_SCOPE),
+    [projectId, setProjectId] = useState(savedSelection.projectId || ALL_SCOPE),
+    [kind, setKind] = useState(TYPES.some(type => type.key === savedSelection.kind) ? savedSelection.kind : "scaff-tags");
   const [documents, setDocuments] = useState([]),
     [reload, setReload] = useState(0);
   const [query, setQuery] = useState(""),
@@ -258,7 +270,15 @@ export default function ESSSafetyPage() {
     safetyProjectsAPI
       .getBuilders()
       .then((value) => {
-        if (active) setBuilders(value);
+        if (active) {
+          setBuilders(value);
+          const validBuilder = savedSelection.builderId === ALL_SCOPE || value.some(item => item.id === savedSelection.builderId)
+            ? savedSelection.builderId : ALL_SCOPE;
+          const validProject = projectScopeOptions(value, validBuilder).some(item => item.id === savedSelection.projectId)
+            ? savedSelection.projectId : ALL_SCOPE;
+          setBuilderId(validBuilder);
+          setProjectId(validProject);
+        }
       })
       .catch((e) => {
         if (active) setError(e.message);
@@ -270,6 +290,11 @@ export default function ESSSafetyPage() {
       active = false;
     };
   }, []);
+  useEffect(() => {
+    if (loading || !selectionKey || error) return;
+    try { localStorage.setItem(selectionKey, JSON.stringify({ builderId, projectId, kind })); }
+    catch { /* Keep navigation working when browser storage is unavailable. */ }
+  }, [loading, selectionKey, builderId, projectId, kind, error]);
   const [initialLoaded, setInitialLoaded] = useState(false);
   const [profileUsers, setProfileUsers] = useState([]);
   const [profileImages, setProfileImages] = useState({});
@@ -564,6 +589,41 @@ export default function ESSSafetyPage() {
       );
     return url;
   }, []);
+  const specificSite = builderId !== ALL_SCOPE && selectedProject && !selectedProject.isAll;
+  const [pdfSizes, setPdfSizes] = useState({});
+  const visibleSizeKey = JSON.stringify(pageRows.map(doc => [doc.id, doc.uploadedAt]));
+  useEffect(() => {
+    if (!specificSite) return undefined;
+    let active = true;
+    const controller = new AbortController();
+    const pending = pageRows.filter(doc => !doc.size && !pdfSizes[`${doc.id}:${doc.uploadedAt}`]);
+    async function worker() {
+      while (active && pending.length) {
+        const doc = pending.shift();
+        const key = `${doc.id}:${doc.uploadedAt}`;
+        let size = "Size unavailable";
+        try {
+          const url = await resolvePdf(doc);
+          if (!active) return;
+          let bytes;
+          try {
+            const response = await fetch(url, { method: "HEAD", signal: controller.signal });
+            const length = response.headers.get("content-length");
+            if (response.ok && length && Number(length) > 0) bytes = Number(length);
+          } catch { /* Some PDF endpoints do not support HEAD. */ }
+          if (!bytes && active) {
+            const response = await fetch(url, { signal: controller.signal });
+            if (!response.ok) throw new Error("PDF unavailable");
+            bytes = (await response.blob()).size;
+          }
+          if (bytes > 0) size = formatBytes(bytes);
+        } catch { /* A missing PDF must not prevent browsing documents. */ }
+        if (active) setPdfSizes(previous => ({ ...previous, [key]: size }));
+      }
+    }
+    Promise.all([worker(), worker(), worker()]);
+    return () => { active = false; controller.abort(); };
+  }, [specificSite, visibleSizeKey, resolvePdf, reload]);
   const openPdf = async (doc) => {
     setMenu(null);
     const popup = window.open("about:blank", "_blank");
@@ -1028,7 +1088,9 @@ export default function ESSSafetyPage() {
                         </span>
                         <span>
                           <strong title={doc.name}>{doc.name}</strong>
-                          {hasDocumentNumber ? (
+                          {specificSite ? (
+                            <small>{doc.size || pdfSizes[`${doc.id}:${doc.uploadedAt}`] || "Loading size…"}</small>
+                          ) : hasDocumentNumber ? (
                             selectedProject?.isAll && <small title={doc.project.name}>{doc.project.name}</small>
                           ) : <small title={`${doc.ref} · ${doc.project.name}`}>
                             {doc.ref}

@@ -1,6 +1,6 @@
 import { getProjectDataStatus } from "./projectDataStatus";
 import { getScaffTagStatus } from "./scaffTagStatus";
-const formatBytes = (value) => {
+export const formatBytes = (value) => {
   if (!Number.isFinite(value)) return "";
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
@@ -30,7 +30,7 @@ export function mapScaffTagRows(items) {
       expiresAt: item.retiredAt || item.dismantledAt || "",
       uploadedBy: item.inspectedBy || item.competentPerson || "Site team",
       location: item.jobLocation || "",
-      size: "",
+      size: formatBytes(item.size),
       raw: item,
     };
   });
@@ -54,7 +54,7 @@ export function mapHandoverRows(items) {
       expiresAt: "",
       uploadedBy: item.essRepresentativeName || "Site team",
       location: item.projectNumberClient || "",
-      size: "",
+      size: formatBytes(item.size),
       raw: item,
     };
   });
