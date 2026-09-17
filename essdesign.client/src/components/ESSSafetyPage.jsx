@@ -500,6 +500,12 @@ export default function ESSSafetyPage() {
     if (menu) menuRef.current?.querySelector("button")?.focus();
   }, [menu]);
   const hasStatus = ["scaff-tags", "handover-certificates"].includes(kind);
+  const hasDocumentNumber = kind !== "scaff-tags";
+  const documentNumber = (doc) => ({
+    "handover-certificates": doc.raw.inspectionNumber,
+    "day-labour-variations": doc.raw.variationNumber,
+    "pre-starts": doc.raw.preStartNumber,
+  })[doc.kind] || "—";
   const currentDocuments = documents.filter((doc) => doc.kind === kind);
   const filtered = currentDocuments
     .filter(
@@ -937,7 +943,7 @@ export default function ESSSafetyPage() {
           </div>
         )}
         <div className="pf-table-area" ref={tableRef} aria-busy={busy}>
-          <table className={hasStatus ? "pf-with-status" : "pf-without-status"}>
+          <table className={`${hasStatus ? "pf-with-status" : "pf-without-status"}${hasDocumentNumber ? " pf-with-document-number" : ""}`}>
             <thead>
               <tr>
                 <th>
@@ -967,9 +973,10 @@ export default function ESSSafetyPage() {
                         )
                       }
                     />
-                    <span>Document / reference</span>
+                    <span>{hasDocumentNumber ? "Document" : "Document / reference"}</span>
                   </div>
                 </th>
+                {hasDocumentNumber && <th>Document number</th>}
                 <th>
                   <button
                     onClick={() => {
@@ -1021,16 +1028,21 @@ export default function ESSSafetyPage() {
                         </span>
                         <span>
                           <strong title={doc.name}>{doc.name}</strong>
-                          <small title={`${doc.ref} · ${doc.project.name}`}>
+                          {hasDocumentNumber ? (
+                            selectedProject?.isAll && <small title={doc.project.name}>{doc.project.name}</small>
+                          ) : <small title={`${doc.ref} · ${doc.project.name}`}>
                             {doc.ref}
                             {selectedProject?.isAll
                               ? ` · ${doc.project.name}`
                               : ""}
-                          </small>
+                          </small>}
                         </span>
                       </button>
                     </div>
                   </td>
+                  {hasDocumentNumber && <td title={String(documentNumber(doc))}>
+                    {documentNumber(doc)}
+                  </td>}
                   <td>{dateText(doc.uploadedAt)}</td>
                   <td>
                     <span className="pf-person">

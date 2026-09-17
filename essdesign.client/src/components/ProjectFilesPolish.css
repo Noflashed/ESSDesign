@@ -1,4 +1,11 @@
 /* Small visual refinements to the approved Project data layout. */
+.project-files-page .pf-table-area table.pf-with-document-number th:nth-child(2) { width: 13%; }
+.project-files-page .pf-table-area table.pf-with-document-number th:nth-child(3) { width: 12%; }
+.project-files-page .pf-table-area table.pf-with-document-number th:nth-child(4) { width: 18%; }
+.project-files-page .pf-table-area table.pf-with-document-number th:nth-child(5) { width: 12%; }
+.project-files-page .pf-table-area table.pf-with-document-number.pf-with-status th:nth-child(6) { width: 10%; }
+.project-files-page .pf-table-area table.pf-with-document-number th:last-child { width: 32px; }
+
 .project-files-page .pf-search input:focus,
 .project-files-page .pf-search input:focus-visible {
   outline: none;
