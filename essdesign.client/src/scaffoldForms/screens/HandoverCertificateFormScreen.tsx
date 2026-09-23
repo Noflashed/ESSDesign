@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/screens/HandoverCertificateFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {clientProjectName} from '../utils/clientProjectName';
 import {markSafetyFormShared} from '../services/supabaseSafetyRecords';
 import {formatMetres} from '../utils/measurements';
 import React from 'react';
@@ -520,7 +521,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
     inspectionNumber: '',
     formReferenceName: route.params.initialScaffoldName ?? '',
     inspectionDateTime: nowStamp(),
-    projectNumberClient: route.params.projectName,
+    projectNumberClient: clientProjectName(route.params.builderName, route.params.projectName),
     sectionLocation: '',
     intendedUse: '',
     drawingNumber: route.params.initialDrawingNumber ?? '',
@@ -549,6 +550,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
     clientSignatureStrokes: [],
     hrwLicenceNumber: '',
   }), [
+    route.params.builderName,
     route.params.initialCompanyEntityId,
     route.params.initialDrawingDocumentId,
     route.params.initialDrawingFolderId,
@@ -723,7 +725,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
           inspectionNumber: existing.inspectionNumber,
           formReferenceName: existing.formReferenceName,
           inspectionDateTime: existing.inspectionDateTime,
-          projectNumberClient: existing.projectNumberClient,
+          projectNumberClient: clientProjectName(route.params.builderName, route.params.projectName, existing.projectNumberClient),
           sectionLocation: existing.sectionLocation,
           intendedUse: existing.intendedUse,
           drawingNumber: existing.drawingNumber,
@@ -757,7 +759,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
           inspectionNumber: existing.inspectionNumber,
           formReferenceName: existing.formReferenceName,
           inspectionDateTime: existing.inspectionDateTime,
-          projectNumberClient: existing.projectNumberClient,
+          projectNumberClient: clientProjectName(route.params.builderName, route.params.projectName, existing.projectNumberClient),
           sectionLocation: existing.sectionLocation,
           intendedUse: existing.intendedUse,
           drawingNumber: existing.drawingNumber,
@@ -813,7 +815,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
     return () => {
       isMounted = false;
     };
-  }, [initialFormState, route.params.builderId, route.params.projectId, route.params.formId]);
+  }, [initialFormState, isInspectionReport, route.params.builderId, route.params.builderName, route.params.projectId, route.params.projectName, route.params.formId]);
 
   React.useEffect(() => {
     if (route.params.formId || route.params.initialCompanyEntityId) {

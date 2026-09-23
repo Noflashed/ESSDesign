@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/screens/DayLabourVariationFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {clientProjectName} from '../utils/clientProjectName';
 import {markSafetyFormShared} from '../services/supabaseSafetyRecords';
 import {formatMetres} from '../utils/measurements';
 import React from 'react';
@@ -315,7 +316,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
     companyEntityId: route.params.initialCompanyEntityId ?? DEFAULT_COMPANY_ENTITY_ID,
     variationNumber: '',
     formReferenceName: '',
-    clientProjectName: route.params.projectName,
+    clientProjectName: clientProjectName(route.params.builderName, route.params.projectName),
     date: nowDate(),
     requestedBy: '',
     siteInstructionNumber: '',
@@ -346,7 +347,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
     clientName: '',
     clientSignature: '',
     clientSignatureStrokes: [],
-  }), [route.params.projectName, route.params.initialCompanyEntityId, user?.fullName]);
+  }), [route.params.builderName, route.params.projectName, route.params.initialCompanyEntityId, user?.fullName]);
   const [form, setForm] = React.useState<FormState>(initialFormState);
   const company = getCompanyEntity(form.companyEntityId);
   const representativeLabel = companyRepresentativeLabel(company.id);
@@ -449,7 +450,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
           companyEntityId: existing.companyEntityId,
           variationNumber: existing.variationNumber,
           formReferenceName: existing.formReferenceName,
-          clientProjectName: existing.clientProjectName,
+          clientProjectName: clientProjectName(route.params.builderName, route.params.projectName, existing.clientProjectName),
           date: existing.date,
           requestedBy: existing.requestedBy,
           siteInstructionNumber: existing.siteInstructionNumber,
@@ -506,7 +507,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
     return () => {
       isMounted = false;
     };
-  }, [initialFormState, route.params.builderId, route.params.projectId, route.params.formId]);
+  }, [initialFormState, route.params.builderId, route.params.builderName, route.params.projectId, route.params.projectName, route.params.formId]);
 
   React.useEffect(() => {
     if (route.params.formId || route.params.initialCompanyEntityId) {

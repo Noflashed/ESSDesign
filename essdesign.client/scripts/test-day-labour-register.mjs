@@ -137,6 +137,7 @@ try {
  await page.getByRole('button',{name:'Save day labour form'}).click();
  await page.getByRole('button',{name:'Share day labour form'}).waitFor();
  const saved = [...rows.values()].find(row=>row.form_type==='day-labour-variations')?.payload;
+ assert.equal(saved.clientProjectName,'Test Builder - Test Project');
  assert.ok(saved);
  assert.equal(saved.companyEntityId,companyEntity);
  assert.equal(saved.photoSlots.length,1);

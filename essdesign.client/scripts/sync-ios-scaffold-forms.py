@@ -15,7 +15,7 @@ services/supabaseSafetyRecords.ts services/supabaseScaffTagQrLabels.ts services/
 services/supabaseDayLabourForms.ts utils/materialSelection.ts features/materialOrders/requestSchema.ts
 theme/appTheme.ts config/companyEntities.ts utils/sydneyTime.ts utils/projectDataEmail.ts
 utils/projectDataWorkflowDemoPreference.ts utils/scaffoldRecordMatching.ts utils/scaffTagQrLabelToken.ts
-utils/measurements.ts utils/scaffoldLifecycle.ts utils/scaffoldFormStatus.ts'''.split()
+utils/clientProjectName.ts utils/measurements.ts utils/scaffoldLifecycle.ts utils/scaffoldFormStatus.ts'''.split()
 files += '''screens/PreStartFormScreen.tsx components/PreStartDocumentEditor.tsx
 components/ProjectDataDatePicker.tsx models/preStart.ts models/preStartDocument.ts
 models/preStartEditorLayout.ts services/supabasePreStarts.ts services/preStartPdfRenderer.ts'''.split()

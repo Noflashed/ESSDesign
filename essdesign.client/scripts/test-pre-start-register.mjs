@@ -87,6 +87,8 @@ try {
  await page.getByText('Pre-start saved',{exact:true}).waitFor(); await ok();
  const saved=[...rows.values()][0];
  assert.equal(saved.form_type,'pre-starts');
+ assert.equal(saved.payload.clientProjectName,'Test Builder - Test Project');
+ assert.equal(saved.project_label,'Test Builder - Test Project');
  assert.equal(saved.payload.companyEntityId,company);
  assert.equal(saved.payload.areaForeman,'Updated Foreman');
  assert.equal(saved.payload.risks,'Risk 1\nRisk 2\nRisk 3\nRisk 4\nRisk 5\nRisk 6');
