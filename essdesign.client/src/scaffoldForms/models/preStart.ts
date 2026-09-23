@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/models/preStart.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {clientProjectName} from '../utils/clientProjectName';
 export type PreStartAnswer = boolean | null;
 export type PreStartStroke = Array<{ x: number; y: number }>;
 export const PRE_START_CHECKLIST = [
@@ -103,7 +104,7 @@ export function createPreStartForm(
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     companyEntityId: 'ess',
     preStartNumber: '',
-    clientProjectName: context.projectName,
+    clientProjectName: clientProjectName(context.builderName, context.projectName),
     date,
     representativeName,
     subject: preStartSubject(date),

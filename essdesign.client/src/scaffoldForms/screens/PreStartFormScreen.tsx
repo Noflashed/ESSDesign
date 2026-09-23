@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/screens/PreStartFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {clientProjectName} from '../utils/clientProjectName';
 import {markSafetyFormShared} from '../services/supabaseSafetyRecords';
 import ProjectDataFormDemoModal from '../components/ProjectDataFormDemoModal';
 import {
@@ -169,6 +170,7 @@ export default function PreStartFormScreen({ navigation, route }: Props) {
       }
       setForm({
         ...saved,
+        clientProjectName: clientProjectName(saved.builderName, saved.projectName, saved.clientProjectName),
         subject: saved.subject || preStartSubject(saved.date),
       });
       setDirty(false);
