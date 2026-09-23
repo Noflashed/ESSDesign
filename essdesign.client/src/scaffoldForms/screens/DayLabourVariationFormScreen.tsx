@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/screens/DayLabourVariationFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {formatDayLabourDate} from '../utils/dayLabourDate';
 import {clientProjectName} from '../utils/clientProjectName';
 import {markSafetyFormShared} from '../services/supabaseSafetyRecords';
 import {formatMetres} from '../utils/measurements';
@@ -1235,6 +1236,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
         <TouchableOpacity
           activeOpacity={0.75}
           disabled={isReadOnly}
+          accessibilityRole="button"
           style={[styles.pdfInput, options.style, styles.pressablePdfInput]}
           onPress={options.onPress}>
           <Text style={[styles.pressablePdfInputText, options.pressableTextStyle]} numberOfLines={1}>
@@ -1626,7 +1628,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
         <Text style={styles.phoneSectionTitle}>Details</Text>
         {renderPhoneField('Form Reference Name', form.formReferenceName, value => updateField('formReferenceName', value))}
         {renderPhoneField('Client / Project Name', form.clientProjectName, value => updateField('clientProjectName', value))}
-        {renderPhoneField('Date', form.date, value => updateField('date', value), {
+        {renderPhoneField('Date', formatDayLabourDate(form.date), value => updateField('date', value), {
           onPress: () => openDatePicker({type: 'formDate'}, form.date),
         })}
         {renderPhoneField('Requested By', form.requestedBy, value => updateField('requestedBy', value))}
@@ -1720,7 +1722,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
               ) : null}
             </View>
             <View style={styles.phoneLabourGrid}>
-              {renderPhoneField('Date', row.date, value => updateLabourRow(index, 'date', value), {
+              {renderPhoneField('Date', formatDayLabourDate(row.date), value => updateLabourRow(index, 'date', value), {
                 onPress: () => openDatePicker({type: 'labourDate', index}, row.date),
               })}
               {renderPhoneField('Men', row.men, value => updateLabourRow(index, 'men', value), {keyboardType: 'decimal-pad'})}
@@ -2070,7 +2072,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
             </View>
             <View style={styles.pdfMetaRows}>
               <View style={styles.pdfMetaColumn}>
-                {renderUnderlineField('DATE', form.date, value => updateField('date', value), {
+                {renderUnderlineField('DATE', formatDayLabourDate(form.date), value => updateField('date', value), {
                   wide: true,
                   onPress: () => openDatePicker({type: 'formDate'}, form.date),
                 })}
@@ -2138,7 +2140,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
                 <View key={`labour-${index}`} style={[styles.labourPdfRow, index < 2 ? styles.labourPdfRowTint : null]}>
                   <View style={styles.labourPdfField}>
                     <Text style={styles.labourPdfLabel}>DATE:</Text>
-                    {renderPdfTextInput(row.date, value => updateLabourRow(index, 'date', value), {
+                    {renderPdfTextInput(formatDayLabourDate(row.date), value => updateLabourRow(index, 'date', value), {
                       style: styles.labourPdfInput,
                       onPress: () => openDatePicker({type: 'labourDate', index}, row.date),
                       pressableTextStyle: styles.labourPressableText,

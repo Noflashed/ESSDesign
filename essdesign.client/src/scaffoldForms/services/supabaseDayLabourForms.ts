@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/services/supabaseDayLabourForms.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {formatDayLabourDate} from '../utils/dayLabourDate';
 import {formatMetres} from '../utils/measurements';
 import {AppConstants} from '../utils/constants';
 import {buildMaterialListColumns} from '../utils/materialSelection';
@@ -577,7 +578,7 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
   const metaRightX = margin + 380;
   underlineField('FORM REFERENCE NAME', form.formReferenceName, metaLeftX, pageH - 170, 360, 142, 44);
   underlineField('CLIENT / PROJECT NAME', form.clientProjectName, metaLeftX, pageH - 198, 360, 150, 44);
-  underlineField('DATE', form.date, metaLeftX, pageH - 226, 360, 48, 18);
+  underlineField('DATE', formatDayLabourDate(form.date), metaLeftX, pageH - 226, 360, 48, 24);
   underlineField('REQUESTED BY', form.requestedBy, metaRightX, pageH - 170, 348, 108, 36);
   underlineField('SITE INSTRUCTION NO', form.siteInstructionNumber, metaRightX, pageH - 198, 348, 132, 30);
   underlineField('HANDOVER DOCUMENT NO', handoverNumber ? `No. ${handoverNumber}` : '', metaRightX, pageH - 226, 348, 160, 30);
@@ -665,7 +666,7 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
     const baseY = rowY - 20;
     page.push(drawText(margin + 8, baseY, 10, 'DATE:', 'F2'));
     page.push(line(margin + 48, baseY - 3, margin + 250, baseY - 3));
-    page.push(drawText(margin + 54, baseY + 1, 9.5, truncate(row.date, 14)));
+    page.push(drawText(margin + 54, baseY + 1, 9.5, truncate(formatDayLabourDate(row.date), 24)));
     page.push(drawText(margin + 266, baseY, 10, 'MEN:', 'F2'));
     page.push(line(margin + 306, baseY - 3, margin + 406, baseY - 3));
     page.push(drawText(margin + 312, baseY + 1, 9.5, truncate(row.men, 8)));
