@@ -767,11 +767,16 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
   const sigW = (contentW - 28) / 2;
   const signatureBlock = (x: number, label: string, name: string, strokes: SignatureStroke[]) => {
     const nameLabelW = label === 'CLIENT' ? 112 : 158;
-    const signatureLabelW = label === 'CLIENT' ? 136 : 196;
+    const signatureLabelW = 136;
     page.push(drawText(x, y, 10.5, `${label} NAME:`, 'F2'));
     page.push(line(x + nameLabelW, y - 3, x + sigW, y - 3));
     page.push(drawText(x + nameLabelW + 5, y + 1, 9.5, truncate(name, 34)));
-    page.push(drawText(x, y - 42, 10.5, `${label} SIGNATURE:`, 'F2'));
+    if (label === 'CLIENT') {
+      page.push(drawText(x, y - 42, 10.5, `${label} SIGNATURE:`, 'F2'));
+    } else {
+      page.push(drawText(x, y - 36, 10.5, label, 'F2'));
+      page.push(drawText(x, y - 50, 10.5, 'SIGNATURE:', 'F2'));
+    }
     page.push(strokeRect(x + signatureLabelW, y - 72, sigW - signatureLabelW, 52));
     page.push(...drawSignatureStrokesPdf(x + signatureLabelW + 4, y - 68, sigW - signatureLabelW - 8, 44, strokes));
   };

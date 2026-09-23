@@ -1612,7 +1612,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
         {renderPdfTextInput(name, onNameChange, {style: styles.pdfSignatureNameInput})}
       </View>
       <View style={styles.pdfSignatureSignRow}>
-        <Text style={[styles.pdfSignatureLabel, {width: '50%', flexShrink: 0}]}>{label} SIGNATURE:</Text>
+        <Text style={[styles.pdfSignatureLabel, styles.pdfSignatureSignLabel]}>{target === 'ess' ? `${label}\nSIGNATURE:` : `${label} SIGNATURE:`}</Text>
         <TouchableOpacity
           activeOpacity={isReadOnly ? 1 : 0.85}
           disabled={isReadOnly}
@@ -3257,6 +3257,7 @@ function makeStyles(theme: ReturnType<typeof getTheme>, isWide: boolean, isPhone
     pdfSignatureGrid: {flexDirection: 'row', gap: isWide ? 28 : 8, paddingTop: 18},
     pdfSignatureBlock: {flex: 1, minWidth: 0, gap: 12},
     pdfSignatureNameRow: {height: isWide ? 27 : 25, flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0},
+    pdfSignatureSignLabel: {width: '50%', flexShrink: 0},
     pdfSignatureSignRow: {flexDirection: 'row', alignItems: 'center', gap: isWide ? 8 : 4, minWidth: 0},
     pdfSignatureLabel: {fontSize: isWide ? 14 : 10.5, lineHeight: isWide ? 18 : 14, color: '#111111', fontWeight: '900', textAlignVertical: 'center', includeFontPadding: false},
     pdfSignatureNameInput: {
