@@ -1,5 +1,5 @@
 // Derived from ESSApp/src/services/supabaseDayLabourForms.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
-import {formatDayLabourTotal} from '../utils/dayLabourTotal';
+import {formatDayLabourTotal, MAX_DAY_LABOUR_ROWS} from '../utils/dayLabourTotal';
 import {formatDayLabourDate} from '../utils/dayLabourDate';
 import {formatMetres} from '../utils/measurements';
 import {AppConstants} from '../utils/constants';
@@ -657,7 +657,7 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
 
   y = infoBottom;
   const rowH = 32;
-  const labourRows: DayLabourLabourRow[] = form.labourRows.length > 0 ? form.labourRows.slice(0, 4) : [{date: '', men: '', hours: '', total: ''}];
+  const labourRows: DayLabourLabourRow[] = form.labourRows.length > 0 ? form.labourRows.slice(0, MAX_DAY_LABOUR_ROWS) : [{date: '', men: '', hours: '', total: ''}];
   labourRows.forEach((row, index) => {
     const rowY = y - index * rowH;
     page.push(index % 2 === 0 ? paleOrange : white);
@@ -766,11 +766,11 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
   y -= photoH + 24;
   const sigW = (contentW - 28) / 2;
   const signatureBlock = (x: number, label: string, name: string, strokes: SignatureStroke[]) => {
-    const nameLabelW = label === 'CLIENT' ? 112 : 158;
+    const nameLabelW = label === 'CLIENT' ? 112 : 196;
     const signatureLabelW = 136;
     page.push(drawText(x, y, 10.5, `${label} NAME:`, 'F2'));
     page.push(line(x + nameLabelW, y - 3, x + sigW, y - 3));
-    page.push(drawText(x + nameLabelW + 5, y + 1, 9.5, truncate(name, 34)));
+    page.push(drawText(x + nameLabelW + 5, y + 1, 9.5, truncateToWidth(name, sigW - nameLabelW - 10, 9.5)));
     if (label === 'CLIENT') {
       page.push(drawText(x, y - 42, 10.5, `${label} SIGNATURE:`, 'F2'));
     } else {
@@ -791,7 +791,17 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
   type PdfPart = string;
   const encoder = new TextEncoder();
   const encodedLength = (part: PdfPart) => encoder.encode(part).length;
-  const pageStream = page.join('\n');
+  // Fit the complete form, including all labour rows and signatures, on one page.
+  // Scale only when the last signature box would cross the bottom margin.
+  const contentBottom = Math.min(margin, y - 72);
+  const pageScale = (pageH - 2 * margin) / (pageH - margin - contentBottom);
+  const pageOffsetX = pageW * (1 - pageScale) / 2;
+  const pageOffsetY = margin - contentBottom * pageScale;
+  const pageStream = [
+    `q ${pageScale} 0 0 ${pageScale} ${pageOffsetX} ${pageOffsetY} cm`,
+    ...page,
+    'Q',
+  ].join('\n');
   let nextObjectNumber = 5;
   const imageObjectNumbers = new Map<string, number>();
   imageResources.forEach(image => {
@@ -916,7 +926,7 @@ export async function getDayLabourVariationForm(builderId: string, projectId: st
       hopUps: !!raw.workTypes?.hopUps,
     },
     labourRows: Array.isArray(raw.labourRows)
-      ? raw.labourRows.slice(0, 4).map(row => ({
+      ? raw.labourRows.slice(0, MAX_DAY_LABOUR_ROWS).map(row => ({
           date: row?.date ?? '',
           men: row?.men ?? '',
           hours: row?.hours ?? '',
@@ -995,7 +1005,7 @@ export async function saveDayLabourVariationForm(
     ...input,
     id: formId,
     variationNumber,
-    labourRows: (form.labourRows ?? []).slice(0, 4),
+    labourRows: (form.labourRows ?? []).slice(0, MAX_DAY_LABOUR_ROWS),
     photoSlots: [...(form.photoSlots ?? [])].sort((a, b) => a.slot - b.slot),
     pdfPath,
     createdAt,

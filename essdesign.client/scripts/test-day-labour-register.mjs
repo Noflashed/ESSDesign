@@ -132,6 +132,15 @@ try {
  assert.equal(await page.getByText('MEN:',{exact:true}).count(),2);
  assert.equal(await page.getByRole('checkbox',{name:'Overtime for labour row 2',exact:true}).getAttribute('aria-checked'),'false');
  await page.getByRole('button',{name:'Remove labour row 2',exact:true}).click();
+ for (let index=1;index<7;index++) {
+  await page.getByRole('button',{name:'Add labour row',exact:true}).click();
+  await dateFields.nth(index+1).locator('..').getByRole('button').click();
+  await page.getByText('23',{exact:true}).click();
+  await page.getByText('MEN:',{exact:true}).nth(index).locator('..').locator('input').fill('1');
+  await page.getByText('HOURS:',{exact:true}).nth(index).locator('..').locator('input').fill(String(index+8));
+ }
+ assert.equal(await page.getByText('MEN:',{exact:true}).count(),7);
+ assert.equal(await page.getByRole('button',{name:'Add labour row',exact:true}).count(),0);
  await page.getByRole('button',{name:'Add material',exact:true}).click();
  await page.getByPlaceholder('0',{exact:true}).first().fill('5');
  await page.getByText('Save materials',{exact:true}).click();
@@ -165,12 +174,18 @@ try {
  assert.equal(saved.date,selectedDate);
  assert.equal(saved.labourRows[0].date,selectedDate);
  const pdf = [...objects.entries()].find(([path])=>path.endsWith('.pdf'))?.[1]?.toString();
- assert.equal(pdf.split(selectedDisplay).length - 1,2,'PDF includes weekdays for main and labour dates');
+ assert.equal(pdf.split(selectedDisplay).length - 1,8,'PDF includes weekdays for main and labour dates');
  assert.equal(saved.clientProjectName,'Test Builder - Test Project');
  assert.ok(saved);
  assert.equal(saved.companyEntityId,companyEntity);
  assert.equal(saved.photoSlots.length,1);
+ assert.equal(saved.labourRows.length,7);
  assert.equal(saved.labourRows[0].total,'24');
+ for(let index=1;index<7;index++) {
+  assert.equal(saved.labourRows[index].total,String(index+8));
+  assert.ok(pdf.includes(`(${index+8})`),'Every labour total is exported');
+ }
+ assert.equal((pdf.match(/\/Type \/Page\b/g)||[]).length,1,'Export remains one page');
  assert.equal(saved.labourRows[0].overtime,true);
  assert.ok(pdf.includes('(24 OT)'),'PDF includes the overtime marker in the total');
  assert.ok(!pdf.includes('(OT)'),'PDF does not include the checkbox label');
@@ -185,7 +200,7 @@ try {
  assert.equal(await field('REQUESTED BY:').inputValue(),'Site Manager');
  assert.equal(await overtime.getAttribute('aria-checked'),'true');
  assert.equal(await field('TOTAL:').inputValue(),'24 OT');
- assert.equal(await page.getByText(selectedDisplay,{exact:true}).count(),2);
+ assert.equal(await page.getByText(selectedDisplay,{exact:true}).count(),8);
  await dateFields.nth(0).locator('..').getByRole('button').click();
  await page.getByText('24', {exact:true}).click();
  await page.getByText(`${weekday('24')} 24/${initialDate[2]}/${initialDate[3]}`,{exact:true}).waitFor();

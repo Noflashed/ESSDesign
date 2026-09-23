@@ -1,5 +1,5 @@
 // Derived from ESSApp/src/screens/DayLabourVariationFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
-import {formatDayLabourTotal} from '../utils/dayLabourTotal';
+import {formatDayLabourTotal, MAX_DAY_LABOUR_ROWS} from '../utils/dayLabourTotal';
 import {formatDayLabourDate} from '../utils/dayLabourDate';
 import {clientProjectName} from '../utils/clientProjectName';
 import {markSafetyFormShared} from '../services/supabaseSafetyRecords';
@@ -472,7 +472,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
           access: existing.access,
           descriptionOfWork: existing.descriptionOfWork,
           workTypes: existing.workTypes,
-          labourRows: existing.labourRows.length > 0 ? existing.labourRows.slice(0, 4) : emptyLabourRows(),
+          labourRows: existing.labourRows.length > 0 ? existing.labourRows.slice(0, MAX_DAY_LABOUR_ROWS) : emptyLabourRows(),
           transportIncluded: existing.transportIncluded,
           engineerRequired: existing.engineerRequired,
           additionalMaterialMode: existing.additionalMaterialMode,
@@ -672,7 +672,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
     setUserHasEdited(true);
     setForm(prev => ({
       ...prev,
-      labourRows: prev.labourRows.length >= 4 ? prev.labourRows : [...prev.labourRows, blankLabourRow()],
+      labourRows: prev.labourRows.length >= MAX_DAY_LABOUR_ROWS ? prev.labourRows : [...prev.labourRows, blankLabourRow()],
     }));
   };
 
@@ -1110,7 +1110,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
         access: saved.access,
         descriptionOfWork: saved.descriptionOfWork,
         workTypes: saved.workTypes,
-        labourRows: saved.labourRows.length > 0 ? saved.labourRows.slice(0, 4) : emptyLabourRows(),
+        labourRows: saved.labourRows.length > 0 ? saved.labourRows.slice(0, MAX_DAY_LABOUR_ROWS) : emptyLabourRows(),
         transportIncluded: saved.transportIncluded,
         engineerRequired: saved.engineerRequired,
         additionalMaterialMode: saved.additionalMaterialMode,
@@ -1762,7 +1762,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
             </View>
           </View>
         ))}
-        {form.labourRows.length < 4 ? (
+        {form.labourRows.length < MAX_DAY_LABOUR_ROWS ? (
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Add labour row"
@@ -2206,7 +2206,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
                   ) : null}
                 </View>
               ))}
-              {form.labourRows.length < 4 ? (
+              {form.labourRows.length < MAX_DAY_LABOUR_ROWS ? (
                 <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel="Add labour row"

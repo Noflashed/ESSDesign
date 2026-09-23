@@ -1,3 +1,5 @@
+export const MAX_DAY_LABOUR_ROWS = 7;
+
 /** Keep the stored calculation numeric; append the overtime marker for display/export. */
 export function formatDayLabourTotal(total: string, overtime = false): string {
   const value = total.trim();
