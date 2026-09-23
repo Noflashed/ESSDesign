@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/screens/DayLabourVariationFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {formatDayLabourTotal} from '../utils/dayLabourTotal';
 import {formatDayLabourDate} from '../utils/dayLabourDate';
 import {clientProjectName} from '../utils/clientProjectName';
 import {markSafetyFormShared} from '../services/supabaseSafetyRecords';
@@ -626,7 +627,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
     </View>
   );
 
-  const updateLabourRow = (index: number, key: keyof DayLabourLabourRow, value: string) => {
+  const updateLabourRow = (index: number, key: Exclude<keyof DayLabourLabourRow, 'overtime'>, value: string) => {
     setUserHasEdited(true);
     setForm(prev => {
       const next = [...prev.labourRows];
@@ -637,6 +638,32 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
       return {...prev, labourRows: next};
     });
   };
+
+  const toggleLabourOvertime = (index: number) => {
+    if (isReadOnly) {
+      return;
+    }
+    setUserHasEdited(true);
+    setForm(prev => ({
+      ...prev,
+      labourRows: prev.labourRows.map((row, rowIndex) =>
+        rowIndex === index ? {...row, overtime: !row.overtime} : row),
+    }));
+  };
+
+  const renderOvertimeCheckbox = (row: DayLabourLabourRow, index: number) => (
+    <TouchableOpacity
+      accessibilityRole="checkbox"
+      accessibilityLabel={`Overtime for labour row ${index + 1}`}
+      accessibilityState={{checked: !!row.overtime, disabled: isReadOnly}}
+      aria-checked={!!row.overtime}
+      disabled={isReadOnly}
+      onPress={() => toggleLabourOvertime(index)}
+      style={styles.overtimeControl}>
+      <Feather name={row.overtime ? 'check-square' : 'square'} size={14} color="#222222" />
+      <Text style={styles.overtimeLabel}>OT</Text>
+    </TouchableOpacity>
+  );
 
   const addLabourRow = () => {
     if (isReadOnly) {
@@ -1729,7 +1756,8 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
               {renderPhoneField('Hours', row.hours, value => updateLabourRow(index, 'hours', value), {keyboardType: 'decimal-pad'})}
               <View style={styles.phoneField}>
                 <Text style={styles.phoneFieldLabel}>Total</Text>
-                <TextInput style={[styles.phoneInput, styles.phoneTotalInput]} editable={false} value={row.total} />
+                {renderOvertimeCheckbox(row, index)}
+                <TextInput style={[styles.phoneInput, styles.phoneTotalInput]} editable={false} value={formatDayLabourTotal(row.total, row.overtime)} />
               </View>
             </View>
           </View>
@@ -2161,10 +2189,11 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
                     <TextInput
                       style={styles.labourTotalValue}
                       editable={false}
-                      value={row.total}
+                      value={formatDayLabourTotal(row.total, row.overtime)}
                       numberOfLines={1}
                     />
                   </View>
+                  {renderOvertimeCheckbox(row, index)}
                   {form.labourRows.length > 1 ? (
                     <TouchableOpacity
                       accessibilityRole="button"
@@ -3065,6 +3094,8 @@ function makeStyles(theme: ReturnType<typeof getTheme>, isWide: boolean, isPhone
       backgroundColor: '#FFFFFF',
     },
     labourPdfRowTint: {backgroundColor: '#F8E0C8'},
+    overtimeControl: {flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 3, paddingVertical: 5},
+    overtimeLabel: {fontSize: 10, fontWeight: '700', color: '#222222'},
     labourPdfField: {flex: 1.3, flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 0, height: isWide ? 22 : 20},
     labourPdfFieldSmall: {flex: 0.82, flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 0, height: isWide ? 22 : 20},
     labourPdfLabel: {fontSize: isWide ? 12 : 9.2, lineHeight: isWide ? 15 : 11.5, color: '#111111', fontWeight: '900', textAlignVertical: 'center'},

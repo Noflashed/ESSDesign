@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/services/supabaseDayLabourForms.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {formatDayLabourTotal} from '../utils/dayLabourTotal';
 import {formatDayLabourDate} from '../utils/dayLabourDate';
 import {formatMetres} from '../utils/measurements';
 import {AppConstants} from '../utils/constants';
@@ -37,6 +38,7 @@ export interface DayLabourPhotoSlot {
 }
 
 export interface DayLabourLabourRow {
+  overtime?: boolean;
   date: string;
   men: string;
   hours: string;
@@ -655,7 +657,7 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
 
   y = infoBottom;
   const rowH = 32;
-  const labourRows = form.labourRows.length > 0 ? form.labourRows.slice(0, 4) : [{date: '', men: '', hours: '', total: ''}];
+  const labourRows: DayLabourLabourRow[] = form.labourRows.length > 0 ? form.labourRows.slice(0, 4) : [{date: '', men: '', hours: '', total: ''}];
   labourRows.forEach((row, index) => {
     const rowY = y - index * rowH;
     page.push(index % 2 === 0 ? paleOrange : white);
@@ -679,7 +681,9 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
     page.push(strokeRect(margin + 668, rowY - 27, 54, 22));
     page.push('1 w');
     page.push(lineColor);
-    page.push(drawCenteredBoxText(margin + 668, rowY - 20, 54, 9.5, truncate(row.total, 8), 'F2'));
+    const totalLabel = formatDayLabourTotal(row.total, row.overtime);
+    const totalFontSize = Math.min(9.5, 9.5 * 46 / Math.max(1, estimatedTextWidth(totalLabel, 9.5, 'F2')));
+    page.push(drawCenteredBoxText(margin + 668, rowY - 20, 54, totalFontSize, totalLabel, 'F2'));
   });
   y -= labourRows.length * rowH;
   page.push(strokeRect(margin, y - 38, contentW, 38));
@@ -912,6 +916,7 @@ export async function getDayLabourVariationForm(builderId: string, projectId: st
           men: row?.men ?? '',
           hours: row?.hours ?? '',
           total: row?.total ?? '',
+          overtime: row?.overtime === true,
         }))
       : [],
     transportIncluded: raw.transportIncluded ?? '',
