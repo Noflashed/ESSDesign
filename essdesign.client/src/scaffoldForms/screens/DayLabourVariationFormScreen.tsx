@@ -1613,7 +1613,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
         <View style={styles.phoneHeroText}>
           <Text style={styles.phoneTitle}>{companyFormTitle(company.id, 'Variation / Day Labour')}</Text>
           <View style={styles.phoneVariationRow}>
-            <Text style={styles.phoneVariationLabel}>Variation No. A</Text>
+            <Text style={styles.phoneVariationLabel}>Variation No.</Text>
             <TextInput
               style={styles.phoneVariationInput}
               editable={false}
@@ -2019,7 +2019,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
                   {companyFormTitle(company.id, 'Variation / Day Labour')}
                 </Text>
                 <View style={styles.variationRow}>
-                  <Text style={styles.variationLabel}>VARIATION NO. A</Text>
+                  <Text style={styles.variationLabel}>VARIATION NO.</Text>
                   {renderPdfTextInput(form.variationNumber || variationNumberPreview, () => {}, {
                     style: styles.variationInput,
                     keyboardType: 'number-pad',

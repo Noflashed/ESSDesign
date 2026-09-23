@@ -552,7 +552,7 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
   page.push(drawText(margin + 116, pageH - 112, 10.5, `Office Address: ${company.officeAddress}`));
   page.push(drawText(pageW - margin - 252, pageH - 78, 19, companyFormTitle(company.id, 'Variation / Day Labour'), 'F2'));
   page.push(red);
-  page.push(drawText(pageW - margin - 202, pageH - 112, 14, 'VARIATION NO. A', 'F2'));
+  page.push(drawText(pageW - margin - 202, pageH - 112, 14, 'VARIATION NO.', 'F2'));
   page.push('2 w');
   page.push('0.925 0.118 0.118 RG');
   page.push(strokeRect(pageW - margin - 56, pageH - 125, 54, 28));
