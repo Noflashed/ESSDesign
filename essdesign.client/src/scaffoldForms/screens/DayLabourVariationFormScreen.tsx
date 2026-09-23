@@ -660,7 +660,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
       disabled={isReadOnly}
       onPress={() => toggleLabourOvertime(index)}
       style={styles.overtimeControl}>
-      <Feather name={row.overtime ? 'check-square' : 'square'} size={14} color="#222222" />
+      <Feather name={row.overtime ? 'check-square' : 'square'} size={18} color="#222222" />
       <Text style={styles.overtimeLabel}>OT</Text>
     </TouchableOpacity>
   );
@@ -3094,8 +3094,8 @@ function makeStyles(theme: ReturnType<typeof getTheme>, isWide: boolean, isPhone
       backgroundColor: '#FFFFFF',
     },
     labourPdfRowTint: {backgroundColor: '#F8E0C8'},
-    overtimeControl: {flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 3, paddingVertical: 5},
-    overtimeLabel: {fontSize: 10, fontWeight: '700', color: '#222222'},
+    overtimeControl: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 5, paddingVertical: 5},
+    overtimeLabel: {fontSize: isPhoneLayout ? 15 : isWide ? 12 : 9.2, lineHeight: isPhoneLayout ? 20 : isWide ? 15 : 11.5, fontWeight: '900', color: '#111111'},
     labourPdfField: {flex: 1.3, flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 0, height: isWide ? 22 : 20},
     labourPdfFieldSmall: {flex: 0.82, flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 0, height: isWide ? 22 : 20},
     labourPdfLabel: {fontSize: isWide ? 12 : 9.2, lineHeight: isWide ? 15 : 11.5, color: '#111111', fontWeight: '900', textAlignVertical: 'center'},
