@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { foldersAPI, resolveProfileImageUrl } from '../services/api';
+import { foldersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
+import useProfilePhoto from '../hooks/useProfilePhoto';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
@@ -62,39 +63,9 @@ const getOwnerInitials = (name) => {
     return name.slice(0, 2).toUpperCase();
 };
 
-const ownerAvatarCache = new Map();
-
 function OwnerAvatar({ item }) {
     const ownerId = item?.userId || '';
-    const [avatarUrl, setAvatarUrl] = useState(() => ownerAvatarCache.get(ownerId) || '');
-
-    useEffect(() => {
-        let cancelled = false;
-
-        if (!ownerId) {
-            setAvatarUrl('');
-            return undefined;
-        }
-
-        if (ownerAvatarCache.has(ownerId)) {
-            setAvatarUrl(ownerAvatarCache.get(ownerId) || '');
-            return undefined;
-        }
-
-        resolveProfileImageUrl(ownerId)
-            .then((url) => {
-                ownerAvatarCache.set(ownerId, url || '');
-                if (!cancelled) setAvatarUrl(url || '');
-            })
-            .catch(() => {
-                ownerAvatarCache.set(ownerId, '');
-                if (!cancelled) setAvatarUrl('');
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [ownerId]);
+    const avatarUrl = useProfilePhoto(ownerId);
 
     return (
         <b className={avatarUrl ? 'has-image' : ''}>

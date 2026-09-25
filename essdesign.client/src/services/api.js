@@ -24,8 +24,9 @@ const optimizeProfileImageUrl = (url) => {
 };
 const getPublicStorageUrl = (bucket, objectPath) => optimizeProfileImageUrl(`${SUPABASE_URL}/storage/v1/object/public/${bucket}/${objectPath}`);
 
-const AVATAR_EXT_CACHE_KEY = 'ess-avatar-ext-v2';
-const AVATAR_MISSING_CACHE_TTL_MS = 30 * 60 * 1000;
+export const PROFILE_PHOTO_CHANGED_EVENT = 'ess-profile-photo-changed';
+export const AVATAR_EXT_CACHE_KEY = 'ess-avatar-ext-v3';
+const AVATAR_CACHE_TTL_MS = 5 * 60 * 1000;
 const avatarLookupInflight = new Map();
 const signedStorageUrlCache = new Map();
 const signedStorageUrlInflight = new Map();
@@ -53,17 +54,10 @@ const setCachedAvatarEntry = (userId, entry) => {
     } catch { /* ignore */ }
 };
 
-const resolveProfileImageUrlUncached = async (userId) => {
+const resolveProfileImageUrlUncached = async (userId, forceRefresh = false) => {
     const cached = getCachedAvatarEntry(userId);
-    const cachedExt = typeof cached === 'string' ? cached : cached?.ext;
-    const cachedMissingAt = typeof cached === 'object' ? cached?.missingAt : null;
-
-    if (cachedExt) {
-        return getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${cachedExt}`);
-    }
-
-    if (cachedMissingAt && Date.now() - cachedMissingAt < AVATAR_MISSING_CACHE_TTL_MS) {
-        return null;
+    if (!forceRefresh && cached?.checkedAt && Date.now() - cached.checkedAt < AVATAR_CACHE_TTL_MS) {
+        return cached.url || null;
     }
 
     try {
@@ -84,31 +78,47 @@ const resolveProfileImageUrlUncached = async (userId) => {
             const avatar = rows.find(row => /^avatar\.(jpe?g|png|webp|heic)$/i.test(row?.name || ''));
             const ext = avatar?.name?.split('.').pop()?.toLowerCase();
             if (ext) {
-                setCachedAvatarEntry(userId, { ext, missingAt: null });
-                return getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${ext}`);
+                const version = avatar.updated_at || avatar.created_at || avatar.id || 'original';
+                const url = `${getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${ext}`)}&v=${encodeURIComponent(version)}`;
+                // A completed upload takes precedence over a lookup started before it.
+                const latest = getCachedAvatarEntry(userId);
+                if (latest?.uploadedAt && latest.uploadedAt !== cached?.uploadedAt) return latest.url;
+                setCachedAvatarEntry(userId, { url, checkedAt: Date.now() });
+                return url;
             }
+            const latest = getCachedAvatarEntry(userId);
+            if (latest?.uploadedAt && latest.uploadedAt !== cached?.uploadedAt) return latest.url;
+            setCachedAvatarEntry(userId, { url: null, checkedAt: Date.now() });
+            return null;
         }
     } catch {
-        // Treat lookup failures as temporarily missing and retry after the short TTL.
+        // Retain the last known image and back off after a temporary storage failure.
     }
-
-    setCachedAvatarEntry(userId, { ext: null, missingAt: Date.now() });
-    return null;
+    const latest = getCachedAvatarEntry(userId);
+    setCachedAvatarEntry(userId, { ...latest, checkedAt: Date.now() });
+    return latest?.url || null;
 };
 
-export const resolveProfileImageUrl = async (userId) => {
+export const resolveProfileImageUrl = async (userId, { forceRefresh = false } = {}) => {
     if (!userId) return null;
 
     if (!avatarLookupInflight.has(userId)) {
         avatarLookupInflight.set(
             userId,
-            resolveProfileImageUrlUncached(userId).finally(() => {
+            resolveProfileImageUrlUncached(userId, forceRefresh).finally(() => {
                 avatarLookupInflight.delete(userId);
             })
         );
     }
 
     return avatarLookupInflight.get(userId);
+};
+
+const rememberUploadedProfilePhoto = (userId, url) => {
+    const now = Date.now();
+    setCachedAvatarEntry(userId, { url, checkedAt: now, uploadedAt: now });
+    window.dispatchEvent(new CustomEvent(PROFILE_PHOTO_CHANGED_EVENT, { detail: { userId, url } }));
+    return url;
 };
 
 export const resolveProfileImageUrls = async (userIds = []) => {
@@ -5518,8 +5528,7 @@ export const usersAPI = {
         const response = await apiClient.post('/users/me/profile-image', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
-        setCachedAvatarEntry(userId, { ext: extension, missingAt: null });
-        return optimizeProfileImageUrl(response.data?.profileImageUrl) || getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${extension}`);
+        return rememberUploadedProfilePhoto(userId, optimizeProfileImageUrl(response.data?.profileImageUrl) || `${getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${extension}`)}&v=${Date.now()}`);
     },
 
     uploadUserProfileImage: async (userId, file) => {
@@ -5529,9 +5538,7 @@ export const usersAPI = {
         const response = await apiClient.post(`/users/${encodeURIComponent(userId)}/profile-image`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
-        const extension = (file.name.split('.').pop() || 'jpg').toLowerCase();
-        setCachedAvatarEntry(userId, { ext: extension, missingAt: null });
-        return optimizeProfileImageUrl(response.data.profileImageUrl);
+        return rememberUploadedProfilePhoto(userId, optimizeProfileImageUrl(response.data.profileImageUrl));
     },
 
     getMyCredentials: async () => {

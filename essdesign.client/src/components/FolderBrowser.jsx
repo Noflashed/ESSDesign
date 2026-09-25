@@ -6,6 +6,7 @@ import PDFViewer from './PDFViewer';
 import LoadingBrandmark from './LoadingBrandmark';
 import { useToast } from './Toast';
 import './FolderBrowser.css';
+import useProfilePhoto from '../hooks/useProfilePhoto';
 
 // Professional SVG Icons (Google Drive style)
 const FolderIcon = ({ size = 20, color = 'currentColor' }) => (
@@ -188,47 +189,7 @@ const getOwnerInitials = (item) => {
     return cleanLabel.slice(0, 2).toUpperCase();
 };
 
-const ownerAvatarUrlCache = new Map();
-const OWNER_AVATAR_CACHE_KEY = 'ess-owner-avatar-url-cache-v1';
 let ownerEmployeeRowsPromise = null;
-
-const readOwnerAvatarStorageCache = () => {
-    try {
-        const raw = localStorage.getItem(OWNER_AVATAR_CACHE_KEY);
-        return raw ? JSON.parse(raw) : {};
-    } catch {
-        return {};
-    }
-};
-
-const writeOwnerAvatarStorageCache = (cache) => {
-    try {
-        localStorage.setItem(OWNER_AVATAR_CACHE_KEY, JSON.stringify(cache));
-    } catch {
-        // Ignore private browsing/quota failures.
-    }
-};
-
-const getStoredOwnerAvatarUrl = (ownerId) => {
-    if (!ownerId) return '';
-    const cache = readOwnerAvatarStorageCache();
-    return typeof cache[ownerId] === 'string' ? cache[ownerId] : '';
-};
-
-const setStoredOwnerAvatarUrl = (ownerId, url) => {
-    if (!ownerId || !url) return;
-    const cache = readOwnerAvatarStorageCache();
-    cache[ownerId] = url;
-    writeOwnerAvatarStorageCache(cache);
-};
-
-const clearStoredOwnerAvatarUrl = (ownerId) => {
-    if (!ownerId) return;
-    const cache = readOwnerAvatarStorageCache();
-    if (cache[ownerId] === undefined) return;
-    delete cache[ownerId];
-    writeOwnerAvatarStorageCache(cache);
-};
 
 const getOwnerEmployeeRows = () => {
     if (!ownerEmployeeRowsPromise) {
@@ -239,79 +200,36 @@ const getOwnerEmployeeRows = () => {
 
 const normalizeOwnerName = (value) => (value || '').trim().toLowerCase().replace(/\s+/g, ' ');
 
-const resolveOwnerAvatarUrl = async (item) => {
+const resolveOwnerAvatarUrl = async (item, options) => {
     const ownerId = item?.userId || item?.UserId || item?.ownerId || item?.OwnerId || '';
-    const storedUrl = getStoredOwnerAvatarUrl(ownerId);
-    if (storedUrl) return storedUrl;
+    const directUrl = await resolveProfileImageUrl(ownerId, options);
+    if (directUrl) return directUrl;
 
+    // Legacy records can use an employee ID rather than the linked account ID.
     const ownerName = normalizeOwnerName(item?.ownerName || item?.OwnerName);
     const employees = await getOwnerEmployeeRows();
-    const linkedEmployee = employees.find((employee) => (
-        (ownerId && String(employee.linkedAuthUserId || employee.linked_auth_user_id || '').toLowerCase() === String(ownerId).toLowerCase())
+    const employee = employees.find(employee => (
+        employee.id === ownerId || employee.linkedAuthUserId === ownerId
         || (ownerName && normalizeOwnerName(`${employee.firstName || ''} ${employee.lastName || ''}`) === ownerName)
     ));
-    const employeeUrl = linkedEmployee?.id ? await resolveProfileImageUrl(linkedEmployee.id) : null;
-    if (employeeUrl) {
-        setStoredOwnerAvatarUrl(ownerId, employeeUrl);
-        return employeeUrl;
+    const linkedId = employee?.linkedAuthUserId;
+    if (linkedId && linkedId !== ownerId) {
+        const linkedUrl = await resolveProfileImageUrl(linkedId, options);
+        if (linkedUrl) return linkedUrl;
     }
-
-    const directUrl = await resolveProfileImageUrl(ownerId);
-    if (directUrl) {
-        setStoredOwnerAvatarUrl(ownerId, directUrl);
-    }
-    return directUrl;
+    return employee?.id && employee.id !== ownerId ? resolveProfileImageUrl(employee.id, options) : null;
 };
 
 function OwnerAvatar({ item }) {
     const ownerId = item?.userId || item?.UserId || item?.ownerId || item?.OwnerId || '';
-    const initials = getOwnerInitials(item);
-    const [avatarUrl, setAvatarUrl] = useState(() => ownerAvatarUrlCache.get(ownerId) || getStoredOwnerAvatarUrl(ownerId) || '');
-
-    useEffect(() => {
-        let active = true;
-
-        if (!ownerId) {
-            setAvatarUrl('');
-            return undefined;
-        }
-
-        const cachedUrl = ownerAvatarUrlCache.get(ownerId);
-        if (cachedUrl !== undefined) {
-            setAvatarUrl(cachedUrl);
-            return undefined;
-        }
-
-        resolveOwnerAvatarUrl(item)
-            .then((url) => {
-                if (!active) return;
-                ownerAvatarUrlCache.set(ownerId, url || '');
-                setAvatarUrl(url || '');
-            })
-            .catch(() => {
-                if (!active) return;
-                ownerAvatarUrlCache.set(ownerId, '');
-                setAvatarUrl('');
-            });
-
-        return () => {
-            active = false;
-        };
-    }, [item, ownerId]);
-
+    const ownerName = item?.ownerName || item?.OwnerName || '';
+    const resolve = useCallback((id, options) => resolveOwnerAvatarUrl({ userId: id, ownerName }, options), [ownerName]);
+    const avatarUrl = useProfilePhoto(ownerId, resolve);
+    const [failedUrl, setFailedUrl] = useState('');
+    const showPhoto = avatarUrl && failedUrl !== avatarUrl;
     return (
-        <span className={`owner-avatar${avatarUrl ? ' has-image' : ''}`}>
-            {avatarUrl ? (
-                <img
-                    src={avatarUrl}
-                    alt=""
-                    onError={() => {
-                        ownerAvatarUrlCache.set(ownerId, '');
-                        clearStoredOwnerAvatarUrl(ownerId);
-                        setAvatarUrl('');
-                    }}
-                />
-            ) : initials}
+        <span className={`owner-avatar${showPhoto ? ' has-image' : ''}`}>
+            {showPhoto ? <img src={avatarUrl} alt="" onError={() => setFailedUrl(avatarUrl)} /> : getOwnerInitials(item)}
         </span>
     );
 }
@@ -1505,27 +1423,6 @@ function FolderBrowser({
     const visibleItems = useMemo(() => {
         return getSortedFolders();
     }, [getSortedFolders]);
-
-    useEffect(() => {
-        const uniqueOwnerItems = [];
-        const seenOwnerIds = new Set();
-
-        for (const item of visibleItems) {
-            const ownerId = item?.userId || item?.UserId || item?.ownerId || item?.OwnerId || '';
-            if (!ownerId || seenOwnerIds.has(ownerId) || ownerAvatarUrlCache.get(ownerId) !== undefined) {
-                continue;
-            }
-            seenOwnerIds.add(ownerId);
-            uniqueOwnerItems.push(item);
-        }
-
-        uniqueOwnerItems.forEach((item) => {
-            const ownerId = item?.userId || item?.UserId || item?.ownerId || item?.OwnerId || '';
-            resolveOwnerAvatarUrl(item)
-                .then((url) => ownerAvatarUrlCache.set(ownerId, url || ''))
-                .catch(() => ownerAvatarUrlCache.set(ownerId, ''));
-        });
-    }, [visibleItems]);
 
     const selectedPreviewItem = useMemo(() => {
         if (detailsPanelDismissed || !selectedItemId || visibleItems.length === 0) {

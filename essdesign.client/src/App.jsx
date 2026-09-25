@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import FolderBrowser from './components/FolderBrowser';
+import useProfilePhoto from './hooks/useProfilePhoto';
 import DrawingRegisterPage from './components/DrawingRegisterPage';
 import ProjectDataRegisterPage from './components/ProjectDataRegisterPage';
 import ScaffoldDashboardPage from './components/ScaffoldDashboardPage';
@@ -764,7 +765,11 @@ function App() {
     const avatarSourceUser = useMemo(() => (
         avatarProfileUser ? { ...user, ...avatarProfileUser } : user
     ), [avatarProfileUser, user]);
-    const avatarCandidates = useMemo(() => buildAvatarCandidates(avatarSourceUser), [avatarSourceUser]);
+    const currentProfilePhoto = useProfilePhoto(isAuthenticated ? user?.id : null);
+    const avatarCandidates = useMemo(() => [...new Set([
+        currentProfilePhoto,
+        ...buildAvatarCandidates(avatarSourceUser)
+    ].filter(Boolean))], [currentProfilePhoto, avatarSourceUser]);
     const [avatarIndex, setAvatarIndex] = useState(0);
 
     const buildAppUrl = useCallback((folderId, page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }) => {
@@ -956,14 +961,14 @@ function App() {
                     || (email && (candidate.email || '').trim().toLowerCase() === email)
                 ));
                 const avatarIdsToVerify = [
-                    employeeMatch?.id,
-                    employeeId,
-                    employeeMatch?.linkedAuthUserId,
-                    employeeMatch?.linked_auth_user_id,
+                    user?.id,
+                    user?.Id,
                     match?.id,
                     match?.Id,
-                    user?.id,
-                    user?.Id
+                    employeeMatch?.linkedAuthUserId,
+                    employeeMatch?.linked_auth_user_id,
+                    employeeMatch?.id,
+                    employeeId
                 ].filter(Boolean);
                 let resolvedAvatarUrl = null;
                 for (const candidateId of [...new Set(avatarIdsToVerify.map(String))]) {
