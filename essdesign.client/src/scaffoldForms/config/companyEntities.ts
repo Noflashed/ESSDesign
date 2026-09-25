@@ -7,6 +7,7 @@ export type CompanyEntityId = 'ess' | 'maloo';
 export type CompanyEntity = {
   id: CompanyEntityId;
   shortName: string;
+  safetyEmail: string;
   projectEntityName: string;
   legalName: string;
   abn: string;
@@ -26,6 +27,7 @@ export const COMPANY_ENTITIES: Record<CompanyEntityId, CompanyEntity> = {
   ess: {
     id: 'ess',
     shortName: 'ESS',
+    safetyEmail: 'Safety@erectsafe.com.au',
     projectEntityName: 'Erect Safe Scaffolding',
     legalName: 'Erect Safe Scaffolding (Sydney) Pty Ltd',
     abn: '46 602 486 957',
@@ -37,6 +39,7 @@ export const COMPANY_ENTITIES: Record<CompanyEntityId, CompanyEntity> = {
   maloo: {
     id: 'maloo',
     shortName: 'Maloo',
+    safetyEmail: 'Safety@malooaccess.com.au',
     projectEntityName: 'Maloo Access Group',
     legalName: 'Maloo Access Group Pty Ltd',
     abn: '96 677 198 300',

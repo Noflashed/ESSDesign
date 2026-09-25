@@ -100,6 +100,7 @@ try {
  const subject=saved.payload.subject, number=saved.payload.preStartNumber;
  await page.getByRole('button',{name:'Share pre-start form'}).click();
  await page.getByText('Share PDF',{exact:true}).waitFor();
+ await page.getByText(company === 'maloo' ? 'Safety@malooaccess.com.au' : 'Safety@erectsafe.com.au',{exact:true}).waitFor();
  await page.getByLabel('Close share',{exact:true}).click();
  assert.equal(rows.get(saved.id).payload.completedAt,undefined,'Opening/closing Share leaves the form unshared');
  await page.getByRole('button',{name:'Share pre-start form'}).click();

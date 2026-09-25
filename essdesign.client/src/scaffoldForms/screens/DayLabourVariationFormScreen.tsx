@@ -2528,6 +2528,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
       </Modal>
 
       <ProjectDataFormShareModal
+        companyEntityId={form.companyEntityId}
         onBeforeShare={() => markSafetyFormShared('day-labour-variations', route.params.builderId, route.params.projectId, formId!)}
         visible={showShareModal}
         theme={theme}

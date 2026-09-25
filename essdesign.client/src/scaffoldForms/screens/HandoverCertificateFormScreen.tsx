@@ -3432,6 +3432,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
       />
 
       <ProjectDataFormShareModal
+        companyEntityId={form.companyEntityId}
         onBeforeShare={() => markSafetyFormShared(recordType, route.params.builderId, route.params.projectId, formId!)}
         visible={showShareModal}
         theme={theme}
