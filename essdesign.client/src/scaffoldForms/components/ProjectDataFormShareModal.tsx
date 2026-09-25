@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/components/ProjectDataFormShareModal.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {CompanyEntityId, getCompanyEntity} from '../config/companyEntities';
 import React from 'react';
 import {
   ActivityIndicator,
@@ -23,7 +24,6 @@ import {collectProjectDataRecipientEmails} from '../utils/projectDataEmail';
 
 type Theme = ReturnType<typeof getTheme>;
 
-export const ESS_SAFETY_EMAIL = 'erinr@erectsafe.com.au';
 
 export interface ProjectDataShareSelection {
   internalRecipients: UserInfo[];
@@ -31,6 +31,7 @@ export interface ProjectDataShareSelection {
 }
 
 interface Props {
+  companyEntityId?: CompanyEntityId;
   visible: boolean;
   theme: Theme;
   title: string;
@@ -82,6 +83,7 @@ function RecipientAvatar({user, styles}: {user: UserInfo; styles: ReturnType<typ
 
 export default function ProjectDataFormShareModal({
   visible,
+  companyEntityId = 'ess',
   theme,
   title,
   recipients,
@@ -93,9 +95,12 @@ export default function ProjectDataFormShareModal({
   onShare,
   onEmailAttachment,
 }: Props) {
+  const company = getCompanyEntity(companyEntityId);
+  const safetyEmail = company.safetyEmail;
+  const safetyName = `${company.shortName} Safety`;
   const [query, setQuery] = React.useState('');
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-  const [includeEssSafety, setIncludeEssSafety] = React.useState(true);
+  const [includeCompanySafety, setIncludeCompanySafety] = React.useState(true);
   const [externalEmailInput, setExternalEmailInput] = React.useState('');
   const [externalEmails, setExternalEmails] = React.useState<string[]>([]);
   const [emailError, setEmailError] = React.useState<string | null>(null);
@@ -104,11 +109,11 @@ export default function ProjectDataFormShareModal({
   React.useEffect(() => {
     setQuery('');
     setSelectedIds(new Set());
-    setIncludeEssSafety(true);
+    setIncludeCompanySafety(true);
     setExternalEmailInput('');
     setExternalEmails([]);
     setEmailError(null);
-  }, [visible]);
+  }, [visible, companyEntityId]);
 
   React.useEffect(() => {
     if (!visible) {
@@ -123,8 +128,8 @@ export default function ProjectDataFormShareModal({
   }, [recipients, visible]);
 
   const availableRecipients = React.useMemo(
-    () => recipients.filter(user => normalizedEmail(user.email) !== ESS_SAFETY_EMAIL),
-    [recipients],
+    () => recipients.filter(user => normalizedEmail(user.email) !== normalizedEmail(safetyEmail)),
+    [recipients, safetyEmail],
   );
 
   const filteredRecipients = React.useMemo(() => {
@@ -145,11 +150,11 @@ export default function ProjectDataFormShareModal({
   );
 
   const totalRecipientCount =
-    (includeEssSafety ? 1 : 0) + selectedRecipients.length + externalEmails.length;
+    (includeCompanySafety ? 1 : 0) + selectedRecipients.length + externalEmails.length;
   const currentSelection: ProjectDataShareSelection = {
     internalRecipients: selectedRecipients,
     externalEmails: [
-      ...(includeEssSafety ? [ESS_SAFETY_EMAIL] : []),
+      ...(includeCompanySafety ? [safetyEmail] : []),
       ...externalEmails,
     ],
   };
@@ -194,11 +199,11 @@ export default function ProjectDataFormShareModal({
       return;
     }
 
-    if (email === ESS_SAFETY_EMAIL) {
-      if (includeEssSafety) {
+    if (email === normalizedEmail(safetyEmail)) {
+      if (includeCompanySafety) {
         setEmailError('That email is already included.');
       } else {
-        setIncludeEssSafety(true);
+        setIncludeCompanySafety(true);
         setExternalEmailInput('');
         setEmailError(null);
       }
@@ -260,30 +265,30 @@ export default function ProjectDataFormShareModal({
           <Text style={styles.sectionLabel}>Default recipient</Text>
           <TouchableOpacity
             accessibilityRole="checkbox"
-            accessibilityState={{checked: includeEssSafety}}
-            accessibilityLabel={`${includeEssSafety ? 'Remove' : 'Add'} ESS Safety`}
+            accessibilityState={{checked: includeCompanySafety}}
+            accessibilityLabel={`${includeCompanySafety ? 'Remove' : 'Add'} ${safetyName}`}
             style={[
               styles.lockedRecipientRow,
-              !includeEssSafety ? styles.lockedRecipientRowExcluded : null,
+              !includeCompanySafety ? styles.lockedRecipientRowExcluded : null,
             ]}
-            onPress={() => setIncludeEssSafety(current => !current)}>
+            onPress={() => setIncludeCompanySafety(current => !current)}>
             <View style={styles.companyAvatar}>
               <Image
-                source={{uri: '/scaffold-forms/logo.png'}}
+                source={company.logo}
                 style={styles.companyLogo}
                 resizeMode="contain"
               />
             </View>
             <View style={styles.recipientTextWrap}>
-              <Text style={styles.recipientName}>ESS Safety</Text>
-              <Text style={styles.recipientEmail}>{ESS_SAFETY_EMAIL}</Text>
+              <Text style={styles.recipientName}>{safetyName}</Text>
+              <Text style={styles.recipientEmail}>{safetyEmail}</Text>
             </View>
             <View
               style={[
                 styles.checkbox,
-                includeEssSafety ? styles.checkboxSelected : null,
+                includeCompanySafety ? styles.checkboxSelected : null,
               ]}>
-              {includeEssSafety ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
+              {includeCompanySafety ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
             </View>
           </TouchableOpacity>
 

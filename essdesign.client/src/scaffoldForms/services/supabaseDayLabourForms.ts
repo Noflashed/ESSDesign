@@ -1,4 +1,6 @@
 // Derived from ESSApp/src/services/supabaseDayLabourForms.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {formatDayLabourTotal, MAX_DAY_LABOUR_ROWS} from '../utils/dayLabourTotal';
+import {formatDayLabourDate} from '../utils/dayLabourDate';
 import {formatMetres} from '../utils/measurements';
 import {AppConstants} from '../utils/constants';
 import {buildMaterialListColumns} from '../utils/materialSelection';
@@ -36,6 +38,7 @@ export interface DayLabourPhotoSlot {
 }
 
 export interface DayLabourLabourRow {
+  overtime?: boolean;
   date: string;
   men: string;
   hours: string;
@@ -551,7 +554,7 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
   page.push(drawText(margin + 116, pageH - 112, 10.5, `Office Address: ${company.officeAddress}`));
   page.push(drawText(pageW - margin - 252, pageH - 78, 19, companyFormTitle(company.id, 'Variation / Day Labour'), 'F2'));
   page.push(red);
-  page.push(drawText(pageW - margin - 202, pageH - 112, 14, 'VARIATION NO. A', 'F2'));
+  page.push(drawText(pageW - margin - 202, pageH - 112, 14, 'VARIATION NO.', 'F2'));
   page.push('2 w');
   page.push('0.925 0.118 0.118 RG');
   page.push(strokeRect(pageW - margin - 56, pageH - 125, 54, 28));
@@ -577,7 +580,7 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
   const metaRightX = margin + 380;
   underlineField('FORM REFERENCE NAME', form.formReferenceName, metaLeftX, pageH - 170, 360, 142, 44);
   underlineField('CLIENT / PROJECT NAME', form.clientProjectName, metaLeftX, pageH - 198, 360, 150, 44);
-  underlineField('DATE', form.date, metaLeftX, pageH - 226, 360, 48, 18);
+  underlineField('DATE', formatDayLabourDate(form.date), metaLeftX, pageH - 226, 360, 48, 24);
   underlineField('REQUESTED BY', form.requestedBy, metaRightX, pageH - 170, 348, 108, 36);
   underlineField('SITE INSTRUCTION NO', form.siteInstructionNumber, metaRightX, pageH - 198, 348, 132, 30);
   underlineField('HANDOVER DOCUMENT NO', handoverNumber ? `No. ${handoverNumber}` : '', metaRightX, pageH - 226, 348, 160, 30);
@@ -654,7 +657,7 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
 
   y = infoBottom;
   const rowH = 32;
-  const labourRows = form.labourRows.length > 0 ? form.labourRows.slice(0, 4) : [{date: '', men: '', hours: '', total: ''}];
+  const labourRows: DayLabourLabourRow[] = form.labourRows.length > 0 ? form.labourRows.slice(0, MAX_DAY_LABOUR_ROWS) : [{date: '', men: '', hours: '', total: ''}];
   labourRows.forEach((row, index) => {
     const rowY = y - index * rowH;
     page.push(index % 2 === 0 ? paleOrange : white);
@@ -665,7 +668,7 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
     const baseY = rowY - 20;
     page.push(drawText(margin + 8, baseY, 10, 'DATE:', 'F2'));
     page.push(line(margin + 48, baseY - 3, margin + 250, baseY - 3));
-    page.push(drawText(margin + 54, baseY + 1, 9.5, truncate(row.date, 14)));
+    page.push(drawText(margin + 54, baseY + 1, 9.5, truncate(formatDayLabourDate(row.date), 24)));
     page.push(drawText(margin + 266, baseY, 10, 'MEN:', 'F2'));
     page.push(line(margin + 306, baseY - 3, margin + 406, baseY - 3));
     page.push(drawText(margin + 312, baseY + 1, 9.5, truncate(row.men, 8)));
@@ -678,7 +681,9 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
     page.push(strokeRect(margin + 668, rowY - 27, 54, 22));
     page.push('1 w');
     page.push(lineColor);
-    page.push(drawCenteredBoxText(margin + 668, rowY - 20, 54, 9.5, truncate(row.total, 8), 'F2'));
+    const totalLabel = formatDayLabourTotal(row.total, row.overtime);
+    const totalFontSize = Math.min(9.5, 9.5 * 46 / Math.max(1, estimatedTextWidth(totalLabel, 9.5, 'F2')));
+    page.push(drawCenteredBoxText(margin + 668, rowY - 20, 54, totalFontSize, totalLabel, 'F2'));
   });
   y -= labourRows.length * rowH;
   page.push(strokeRect(margin, y - 38, contentW, 38));
@@ -761,12 +766,17 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
   y -= photoH + 24;
   const sigW = (contentW - 28) / 2;
   const signatureBlock = (x: number, label: string, name: string, strokes: SignatureStroke[]) => {
-    const nameLabelW = label === 'CLIENT' ? 112 : 158;
-    const signatureLabelW = label === 'CLIENT' ? 136 : 196;
+    const nameLabelW = label === 'CLIENT' ? 112 : 196;
+    const signatureLabelW = 136;
     page.push(drawText(x, y, 10.5, `${label} NAME:`, 'F2'));
     page.push(line(x + nameLabelW, y - 3, x + sigW, y - 3));
-    page.push(drawText(x + nameLabelW + 5, y + 1, 9.5, truncate(name, 34)));
-    page.push(drawText(x, y - 42, 10.5, `${label} SIGNATURE:`, 'F2'));
+    page.push(drawText(x + nameLabelW + 5, y + 1, 9.5, truncateToWidth(name, sigW - nameLabelW - 10, 9.5)));
+    if (label === 'CLIENT') {
+      page.push(drawText(x, y - 42, 10.5, `${label} SIGNATURE:`, 'F2'));
+    } else {
+      page.push(drawText(x, y - 36, 10.5, label, 'F2'));
+      page.push(drawText(x, y - 50, 10.5, 'SIGNATURE:', 'F2'));
+    }
     page.push(strokeRect(x + signatureLabelW, y - 72, sigW - signatureLabelW, 52));
     page.push(...drawSignatureStrokesPdf(x + signatureLabelW + 4, y - 68, sigW - signatureLabelW - 8, 44, strokes));
   };
@@ -781,7 +791,17 @@ export async function buildDayLabourVariationPdfBody(form: DayLabourVariationFor
   type PdfPart = string;
   const encoder = new TextEncoder();
   const encodedLength = (part: PdfPart) => encoder.encode(part).length;
-  const pageStream = page.join('\n');
+  // Fit the complete form, including all labour rows and signatures, on one page.
+  // Scale only when the last signature box would cross the bottom margin.
+  const contentBottom = Math.min(margin, y - 72);
+  const pageScale = (pageH - 2 * margin) / (pageH - margin - contentBottom);
+  const pageOffsetX = pageW * (1 - pageScale) / 2;
+  const pageOffsetY = margin - contentBottom * pageScale;
+  const pageStream = [
+    `q ${pageScale} 0 0 ${pageScale} ${pageOffsetX} ${pageOffsetY} cm`,
+    ...page,
+    'Q',
+  ].join('\n');
   let nextObjectNumber = 5;
   const imageObjectNumbers = new Map<string, number>();
   imageResources.forEach(image => {
@@ -906,11 +926,12 @@ export async function getDayLabourVariationForm(builderId: string, projectId: st
       hopUps: !!raw.workTypes?.hopUps,
     },
     labourRows: Array.isArray(raw.labourRows)
-      ? raw.labourRows.slice(0, 4).map(row => ({
+      ? raw.labourRows.slice(0, MAX_DAY_LABOUR_ROWS).map(row => ({
           date: row?.date ?? '',
           men: row?.men ?? '',
           hours: row?.hours ?? '',
           total: row?.total ?? '',
+          overtime: row?.overtime === true,
         }))
       : [],
     transportIncluded: raw.transportIncluded ?? '',
@@ -984,7 +1005,7 @@ export async function saveDayLabourVariationForm(
     ...input,
     id: formId,
     variationNumber,
-    labourRows: (form.labourRows ?? []).slice(0, 4),
+    labourRows: (form.labourRows ?? []).slice(0, MAX_DAY_LABOUR_ROWS),
     photoSlots: [...(form.photoSlots ?? [])].sort((a, b) => a.slot - b.slot),
     pdfPath,
     createdAt,

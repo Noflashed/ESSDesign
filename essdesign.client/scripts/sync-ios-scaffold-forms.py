@@ -15,7 +15,7 @@ services/supabaseSafetyRecords.ts services/supabaseScaffTagQrLabels.ts services/
 services/supabaseDayLabourForms.ts utils/materialSelection.ts features/materialOrders/requestSchema.ts
 theme/appTheme.ts config/companyEntities.ts utils/sydneyTime.ts utils/projectDataEmail.ts
 utils/projectDataWorkflowDemoPreference.ts utils/scaffoldRecordMatching.ts utils/scaffTagQrLabelToken.ts
-utils/clientProjectName.ts utils/measurements.ts utils/scaffoldLifecycle.ts utils/scaffoldFormStatus.ts'''.split()
+utils/dayLabourTotal.ts utils/dayLabourDate.ts utils/clientProjectName.ts utils/measurements.ts utils/scaffoldLifecycle.ts utils/scaffoldFormStatus.ts'''.split()
 files += '''screens/PreStartFormScreen.tsx components/PreStartDocumentEditor.tsx
 components/ProjectDataDatePicker.tsx models/preStart.ts models/preStartDocument.ts
 models/preStartEditorLayout.ts services/supabasePreStarts.ts services/preStartPdfRenderer.ts'''.split()
@@ -63,8 +63,6 @@ for name in files:
         content = content.replace('    route.params.builderName,\n    route.params.formId,',
             '    route.params.builderName,\n    route.params.initialCompanyEntityId,\n    route.params.formId,')
     if name == 'screens/DayLabourVariationFormScreen.tsx':
-        # Reserve equal label widths so both signature boxes have equal space.
-        content = content.replace('<Text style={styles.pdfSignatureLabel}>{label} SIGNATURE:</Text>', "<Text style={[styles.pdfSignatureLabel, {width: '50%', flexShrink: 0}]}>{label} SIGNATURE:</Text>")
         content = content.replace('          style={styles.pdfSignatureBox}', '          accessibilityRole="button"\n          accessibilityLabel={`${label} signature`}\n          style={styles.pdfSignatureBox}')
         content = content.replace('    labourTotalValue: {\n      flex: 1,', '    labourTotalValue: {\n      flex: 1,\n      width: 0,')
         content = content.replace("pdfInput: {color: '#222222'},", "pdfInput: {color: '#222222', minWidth: 0},")

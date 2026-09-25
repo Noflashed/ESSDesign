@@ -1,4 +1,6 @@
 // Derived from ESSApp/src/screens/DayLabourVariationFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {formatDayLabourTotal, MAX_DAY_LABOUR_ROWS} from '../utils/dayLabourTotal';
+import {formatDayLabourDate} from '../utils/dayLabourDate';
 import {clientProjectName} from '../utils/clientProjectName';
 import {markSafetyFormShared} from '../services/supabaseSafetyRecords';
 import {formatMetres} from '../utils/measurements';
@@ -470,7 +472,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
           access: existing.access,
           descriptionOfWork: existing.descriptionOfWork,
           workTypes: existing.workTypes,
-          labourRows: existing.labourRows.length > 0 ? existing.labourRows.slice(0, 4) : emptyLabourRows(),
+          labourRows: existing.labourRows.length > 0 ? existing.labourRows.slice(0, MAX_DAY_LABOUR_ROWS) : emptyLabourRows(),
           transportIncluded: existing.transportIncluded,
           engineerRequired: existing.engineerRequired,
           additionalMaterialMode: existing.additionalMaterialMode,
@@ -625,7 +627,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
     </View>
   );
 
-  const updateLabourRow = (index: number, key: keyof DayLabourLabourRow, value: string) => {
+  const updateLabourRow = (index: number, key: Exclude<keyof DayLabourLabourRow, 'overtime'>, value: string) => {
     setUserHasEdited(true);
     setForm(prev => {
       const next = [...prev.labourRows];
@@ -637,6 +639,32 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
     });
   };
 
+  const toggleLabourOvertime = (index: number) => {
+    if (isReadOnly) {
+      return;
+    }
+    setUserHasEdited(true);
+    setForm(prev => ({
+      ...prev,
+      labourRows: prev.labourRows.map((row, rowIndex) =>
+        rowIndex === index ? {...row, overtime: !row.overtime} : row),
+    }));
+  };
+
+  const renderOvertimeCheckbox = (row: DayLabourLabourRow, index: number) => (
+    <TouchableOpacity
+      accessibilityRole="checkbox"
+      accessibilityLabel={`Overtime for labour row ${index + 1}`}
+      accessibilityState={{checked: !!row.overtime, disabled: isReadOnly}}
+      aria-checked={!!row.overtime}
+      disabled={isReadOnly}
+      onPress={() => toggleLabourOvertime(index)}
+      style={styles.overtimeControl}>
+      <Feather name={row.overtime ? 'check-square' : 'square'} size={18} color="#222222" />
+      <Text style={styles.overtimeLabel}>OT</Text>
+    </TouchableOpacity>
+  );
+
   const addLabourRow = () => {
     if (isReadOnly) {
       return;
@@ -644,7 +672,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
     setUserHasEdited(true);
     setForm(prev => ({
       ...prev,
-      labourRows: prev.labourRows.length >= 4 ? prev.labourRows : [...prev.labourRows, blankLabourRow()],
+      labourRows: prev.labourRows.length >= MAX_DAY_LABOUR_ROWS ? prev.labourRows : [...prev.labourRows, blankLabourRow()],
     }));
   };
 
@@ -1082,7 +1110,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
         access: saved.access,
         descriptionOfWork: saved.descriptionOfWork,
         workTypes: saved.workTypes,
-        labourRows: saved.labourRows.length > 0 ? saved.labourRows.slice(0, 4) : emptyLabourRows(),
+        labourRows: saved.labourRows.length > 0 ? saved.labourRows.slice(0, MAX_DAY_LABOUR_ROWS) : emptyLabourRows(),
         transportIncluded: saved.transportIncluded,
         engineerRequired: saved.engineerRequired,
         additionalMaterialMode: saved.additionalMaterialMode,
@@ -1235,6 +1263,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
         <TouchableOpacity
           activeOpacity={0.75}
           disabled={isReadOnly}
+          accessibilityRole="button"
           style={[styles.pdfInput, options.style, styles.pressablePdfInput]}
           onPress={options.onPress}>
           <Text style={[styles.pressablePdfInputText, options.pressableTextStyle]} numberOfLines={1}>
@@ -1583,7 +1612,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
         {renderPdfTextInput(name, onNameChange, {style: styles.pdfSignatureNameInput})}
       </View>
       <View style={styles.pdfSignatureSignRow}>
-        <Text style={[styles.pdfSignatureLabel, {width: '50%', flexShrink: 0}]}>{label} SIGNATURE:</Text>
+        <Text style={[styles.pdfSignatureLabel, styles.pdfSignatureSignLabel]}>{target === 'ess' ? `${label}\nSIGNATURE:` : `${label} SIGNATURE:`}</Text>
         <TouchableOpacity
           activeOpacity={isReadOnly ? 1 : 0.85}
           disabled={isReadOnly}
@@ -1611,7 +1640,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
         <View style={styles.phoneHeroText}>
           <Text style={styles.phoneTitle}>{companyFormTitle(company.id, 'Variation / Day Labour')}</Text>
           <View style={styles.phoneVariationRow}>
-            <Text style={styles.phoneVariationLabel}>Variation No. A</Text>
+            <Text style={styles.phoneVariationLabel}>Variation No.</Text>
             <TextInput
               style={styles.phoneVariationInput}
               editable={false}
@@ -1626,7 +1655,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
         <Text style={styles.phoneSectionTitle}>Details</Text>
         {renderPhoneField('Form Reference Name', form.formReferenceName, value => updateField('formReferenceName', value))}
         {renderPhoneField('Client / Project Name', form.clientProjectName, value => updateField('clientProjectName', value))}
-        {renderPhoneField('Date', form.date, value => updateField('date', value), {
+        {renderPhoneField('Date', formatDayLabourDate(form.date), value => updateField('date', value), {
           onPress: () => openDatePicker({type: 'formDate'}, form.date),
         })}
         {renderPhoneField('Requested By', form.requestedBy, value => updateField('requestedBy', value))}
@@ -1720,19 +1749,20 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
               ) : null}
             </View>
             <View style={styles.phoneLabourGrid}>
-              {renderPhoneField('Date', row.date, value => updateLabourRow(index, 'date', value), {
+              {renderPhoneField('Date', formatDayLabourDate(row.date), value => updateLabourRow(index, 'date', value), {
                 onPress: () => openDatePicker({type: 'labourDate', index}, row.date),
               })}
               {renderPhoneField('Men', row.men, value => updateLabourRow(index, 'men', value), {keyboardType: 'decimal-pad'})}
               {renderPhoneField('Hours', row.hours, value => updateLabourRow(index, 'hours', value), {keyboardType: 'decimal-pad'})}
               <View style={styles.phoneField}>
                 <Text style={styles.phoneFieldLabel}>Total</Text>
-                <TextInput style={[styles.phoneInput, styles.phoneTotalInput]} editable={false} value={row.total} />
+                {renderOvertimeCheckbox(row, index)}
+                <TextInput style={[styles.phoneInput, styles.phoneTotalInput]} editable={false} value={formatDayLabourTotal(row.total, row.overtime)} />
               </View>
             </View>
           </View>
         ))}
-        {form.labourRows.length < 4 ? (
+        {form.labourRows.length < MAX_DAY_LABOUR_ROWS ? (
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Add labour row"
@@ -2017,7 +2047,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
                   {companyFormTitle(company.id, 'Variation / Day Labour')}
                 </Text>
                 <View style={styles.variationRow}>
-                  <Text style={styles.variationLabel}>VARIATION NO. A</Text>
+                  <Text style={styles.variationLabel}>VARIATION NO.</Text>
                   {renderPdfTextInput(form.variationNumber || variationNumberPreview, () => {}, {
                     style: styles.variationInput,
                     keyboardType: 'number-pad',
@@ -2070,7 +2100,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
             </View>
             <View style={styles.pdfMetaRows}>
               <View style={styles.pdfMetaColumn}>
-                {renderUnderlineField('DATE', form.date, value => updateField('date', value), {
+                {renderUnderlineField('DATE', formatDayLabourDate(form.date), value => updateField('date', value), {
                   wide: true,
                   onPress: () => openDatePicker({type: 'formDate'}, form.date),
                 })}
@@ -2138,7 +2168,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
                 <View key={`labour-${index}`} style={[styles.labourPdfRow, index < 2 ? styles.labourPdfRowTint : null]}>
                   <View style={styles.labourPdfField}>
                     <Text style={styles.labourPdfLabel}>DATE:</Text>
-                    {renderPdfTextInput(row.date, value => updateLabourRow(index, 'date', value), {
+                    {renderPdfTextInput(formatDayLabourDate(row.date), value => updateLabourRow(index, 'date', value), {
                       style: styles.labourPdfInput,
                       onPress: () => openDatePicker({type: 'labourDate', index}, row.date),
                       pressableTextStyle: styles.labourPressableText,
@@ -2159,10 +2189,11 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
                     <TextInput
                       style={styles.labourTotalValue}
                       editable={false}
-                      value={row.total}
+                      value={formatDayLabourTotal(row.total, row.overtime)}
                       numberOfLines={1}
                     />
                   </View>
+                  {renderOvertimeCheckbox(row, index)}
                   {form.labourRows.length > 1 ? (
                     <TouchableOpacity
                       accessibilityRole="button"
@@ -2175,7 +2206,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
                   ) : null}
                 </View>
               ))}
-              {form.labourRows.length < 4 ? (
+              {form.labourRows.length < MAX_DAY_LABOUR_ROWS ? (
                 <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel="Add labour row"
@@ -2497,6 +2528,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
       </Modal>
 
       <ProjectDataFormShareModal
+        companyEntityId={form.companyEntityId}
         onBeforeShare={() => markSafetyFormShared('day-labour-variations', route.params.builderId, route.params.projectId, formId!)}
         visible={showShareModal}
         theme={theme}
@@ -3063,6 +3095,8 @@ function makeStyles(theme: ReturnType<typeof getTheme>, isWide: boolean, isPhone
       backgroundColor: '#FFFFFF',
     },
     labourPdfRowTint: {backgroundColor: '#F8E0C8'},
+    overtimeControl: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 5, paddingVertical: 5},
+    overtimeLabel: {fontSize: isPhoneLayout ? 15 : isWide ? 12 : 9.2, lineHeight: isPhoneLayout ? 20 : isWide ? 15 : 11.5, fontWeight: '900', color: '#111111'},
     labourPdfField: {flex: 1.3, flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 0, height: isWide ? 22 : 20},
     labourPdfFieldSmall: {flex: 0.82, flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 0, height: isWide ? 22 : 20},
     labourPdfLabel: {fontSize: isWide ? 12 : 9.2, lineHeight: isWide ? 15 : 11.5, color: '#111111', fontWeight: '900', textAlignVertical: 'center'},
@@ -3224,6 +3258,7 @@ function makeStyles(theme: ReturnType<typeof getTheme>, isWide: boolean, isPhone
     pdfSignatureGrid: {flexDirection: 'row', gap: isWide ? 28 : 8, paddingTop: 18},
     pdfSignatureBlock: {flex: 1, minWidth: 0, gap: 12},
     pdfSignatureNameRow: {height: isWide ? 27 : 25, flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0},
+    pdfSignatureSignLabel: {width: '50%', flexShrink: 0},
     pdfSignatureSignRow: {flexDirection: 'row', alignItems: 'center', gap: isWide ? 8 : 4, minWidth: 0},
     pdfSignatureLabel: {fontSize: isWide ? 14 : 10.5, lineHeight: isWide ? 18 : 14, color: '#111111', fontWeight: '900', textAlignVertical: 'center', includeFontPadding: false},
     pdfSignatureNameInput: {

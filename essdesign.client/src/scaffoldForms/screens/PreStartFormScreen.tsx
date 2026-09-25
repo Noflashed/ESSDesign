@@ -595,6 +595,7 @@ export default function PreStartFormScreen({ navigation, route }: Props) {
         }}
       />
       <ProjectDataFormShareModal
+        companyEntityId={form.companyEntityId}
         onBeforeShare={() => markSafetyFormShared('pre-starts', route.params.builderId, route.params.projectId, form.id)}
         visible={showShare}
         theme={theme}
