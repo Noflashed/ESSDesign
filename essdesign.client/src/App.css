@@ -25164,38 +25164,68 @@ button.stat-card {
 }
 
 .employees-page .employee-profile-photo-control {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
+    flex-shrink: 0;
 }
 
 .employees-page .employee-profile-photo-change {
     position: relative;
-    color: #2563eb;
-    font-size: 11px;
-    font-weight: 600;
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    overflow: hidden;
     cursor: pointer;
 }
 
-.employees-page .employee-profile-photo-change input {
+.employees-page .employee-profile-photo-overlay {
     position: absolute;
     inset: 0;
-    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: rgba(15, 23, 42, 0.65);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
     opacity: 0;
-    cursor: pointer;
+    transform: translateY(6px);
+    transition: opacity 180ms ease, transform 180ms ease;
+    pointer-events: none;
 }
 
-.employees-page .employee-profile-photo-change:focus-within {
+.employees-page .employee-profile-photo-change .employees-avatar {
+    transition: transform 180ms ease;
+}
+
+.employees-page .employee-profile-photo-change:hover .employees-avatar {
+    transform: scale(1.05);
+}
+
+.employees-page .employee-profile-photo-change:hover .employee-profile-photo-overlay,
+.employees-page .employee-profile-photo-change:focus-visible .employee-profile-photo-overlay,
+.employees-page .employee-profile-photo-change[aria-busy="true"] .employee-profile-photo-overlay {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.employees-page .employee-profile-photo-change:focus-visible {
     outline: 2px solid #2563eb;
     outline-offset: 4px;
 }
 
-.employees-page .employee-profile-photo-control > small {
-    max-width: 110px;
-    color: #71717a;
-    font-size: 10px;
-    text-align: center;
+.employees-page .employee-profile-photo-change:disabled {
+    cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .employees-page .employee-profile-photo-overlay,
+    .employees-page .employee-profile-photo-change .employees-avatar {
+        transition: none;
+        transform: none;
+    }
 }
 
 .employees-page .employee-profile-inline-form {

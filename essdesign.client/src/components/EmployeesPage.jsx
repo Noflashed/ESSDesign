@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Info, Maximize2, MoreHorizontal, Phone, Plus, Search, User, UserPlus, X } from 'lucide-react';
+import { Camera, Info, Maximize2, MoreHorizontal, Phone, Plus, Search, User, UserPlus, X } from 'lucide-react';
 import { authAPI, resolveProfileImageUrls, rosteringAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
@@ -514,6 +514,7 @@ function EmployeeAvatar({ entry }) {
 export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onOpenLeadingHandRelationships }) {
     const previewMode = import.meta.env.DEV && new URLSearchParams(window.location.search).get('devAuth') === '1';
     const selectedCredentialImageUrlsRef = useRef(new Map());
+    const profilePhotoInputRef = useRef(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [savingAppUser, setSavingAppUser] = useState(false);
@@ -1296,11 +1297,13 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     <header className="employee-profile-main-header">
                                         <div className="employee-profile-main-identity">
                                             <div className="employee-profile-photo-control">
-                                                <div className="employee-profile-main-avatar"><EmployeeAvatar entry={selectedInfoEntry} /></div>
-                                                {selectedProfileUserId ? <label className="employee-profile-photo-change">
-                                                    {uploadingPhoto ? 'Uploading...' : 'Change photo'}
-                                                    <input type="file" aria-label="Change employee profile photo" accept="image/jpeg,image/png,image/webp" disabled={uploadingPhoto || previewMode} onChange={uploadEmployeePhoto} />
-                                                </label> : <small>Link an account to add a photo</small>}
+                                                {selectedProfileUserId ? <>
+                                                    <button type="button" className="employee-profile-photo-change employee-profile-main-avatar" aria-label={uploadingPhoto ? 'Uploading profile photo' : 'Change employee profile photo'} aria-busy={uploadingPhoto} disabled={uploadingPhoto || previewMode} onClick={() => profilePhotoInputRef.current?.click()}>
+                                                        <EmployeeAvatar entry={selectedInfoEntry} />
+                                                        <span className="employee-profile-photo-overlay" aria-hidden="true"><Camera size={20} /><span>{uploadingPhoto ? 'Uploading…' : 'Change photo'}</span></span>
+                                                    </button>
+                                                    <input ref={profilePhotoInputRef} hidden type="file" aria-label="Upload employee profile photo" accept="image/jpeg,image/png,image/webp" disabled={uploadingPhoto || previewMode} onChange={uploadEmployeePhoto} />
+                                                </> : <div className="employee-profile-main-avatar" title="Link an account to add a photo"><EmployeeAvatar entry={selectedInfoEntry} /></div>}
                                             </div>
                                             <div className="employee-profile-main-copy">
                                                 <span className="employee-profile-eyebrow">Employee profile</span>
