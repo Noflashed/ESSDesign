@@ -2342,7 +2342,7 @@ namespace ESSDesign.Server.Services
                     $"Failed to upload profile image. Status: {(int)response.StatusCode}. Body: {errorBody}");
             }
 
-            var publicUrl = $"{_supabaseUrl.TrimEnd('/')}/storage/v1/object/public/{_profileImagesBucketName}/{objectPath}";
+            var publicUrl = $"{_supabaseUrl.TrimEnd('/')}/storage/v1/object/public/{_profileImagesBucketName}/{objectPath}?v={Guid.NewGuid():N}";
             try
             {
                 await PersistProfileImageMetadataAsync(safeUserId, publicUrl, objectPath);
@@ -2362,8 +2362,8 @@ namespace ESSDesign.Server.Services
             }
 
             var records = await GetEmployeeCredentialRecordsAsync(normalizedUserId);
-            return records
-                .Select(ToEmployeeCredentialResponse)
+            var responses = await Task.WhenAll(records.Select(CreateEmployeeCredentialResponseAsync));
+            return responses
                 .OrderBy(item => item.CredentialType, StringComparer.Ordinal)
                 .ToList();
         }
@@ -2459,7 +2459,36 @@ namespace ESSDesign.Server.Services
 
             var saved = (await GetEmployeeCredentialRecordsAsync(normalizedUserId, normalizedType)).FirstOrDefault()
                 ?? throw new InvalidOperationException("Credential could not be loaded after saving.");
-            return ToEmployeeCredentialResponse(saved);
+            return await CreateEmployeeCredentialResponseAsync(saved);
+        }
+
+        private async Task<EmployeeCredentialResponse> CreateEmployeeCredentialResponseAsync(EmployeeCredentialRecord record)
+        {
+            var response = ToEmployeeCredentialResponse(record);
+            if (!response.HasFrontImage) return response;
+            try
+            {
+                var cacheKey = $"credential:{_employeeCredentialsBucketName}/{record.FrontImagePath}";
+                var versionSuffix = $"&v={Uri.EscapeDataString(record.UpdatedAt.ToString("O"))}";
+                if (_signedUrlCache.TryGetValue(cacheKey, out var cached) &&
+                    cached.ExpiresAt > DateTimeOffset.UtcNow.AddMinutes(2) &&
+                    cached.Url.EndsWith(versionSuffix, StringComparison.Ordinal))
+                {
+                    response.FrontImageUrl = cached.Url;
+                    return response;
+                }
+                // Delivered only after the controller checks owner/admin access. Keep the bucket private.
+                response.FrontImageUrl = await _supabase.Storage.From(_employeeCredentialsBucketName)
+                    .CreateSignedUrl(record.FrontImagePath!, 3600);
+                response.FrontImageUrl += versionSuffix;
+                _signedUrlCache[cacheKey] = (response.FrontImageUrl, DateTimeOffset.UtcNow.AddMinutes(55));
+            }
+            catch (Exception ex)
+            {
+                // Older storage deployments can still use the authenticated image endpoint.
+                _logger.LogWarning(ex, "Unable to sign credential image for {CredentialId}", record.Id);
+            }
+            return response;
         }
 
         private async Task<List<EmployeeCredentialRecord>> GetEmployeeCredentialRecordsAsync(

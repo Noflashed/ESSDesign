@@ -20754,7 +20754,7 @@ button.stat-card {
     overflow: hidden;
     border: 1px solid #d8e1ec;
     border-radius: 5px;
-    background: #eef2f7;
+    background: transparent;
     color: #ffffff;
     text-decoration: none;
 }
@@ -22584,6 +22584,7 @@ button.stat-card {
 }
 
 .employees-page button.employee-details-credential-image:not(.empty) {
+    background: transparent;
     padding: 0;
     cursor: zoom-in;
     transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
@@ -22702,7 +22703,7 @@ button.stat-card {
     max-height: calc(100vh - 126px);
     display: block;
     object-fit: contain;
-    background: #eef2f7;
+    background: transparent;
 }
 
 .employees-page .employee-details-credentials-message {
@@ -25160,6 +25161,41 @@ button.stat-card {
     overflow-y: auto;
     background: #fafafa;
     color: #202024;
+}
+
+.employees-page .employee-profile-photo-control {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.employees-page .employee-profile-photo-change {
+    position: relative;
+    color: #2563eb;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.employees-page .employee-profile-photo-change input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.employees-page .employee-profile-photo-change:focus-within {
+    outline: 2px solid #2563eb;
+    outline-offset: 4px;
+}
+
+.employees-page .employee-profile-photo-control > small {
+    max-width: 110px;
+    color: #71717a;
+    font-size: 10px;
+    text-align: center;
 }
 
 .employees-page .employee-profile-inline-form {

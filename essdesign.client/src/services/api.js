@@ -5522,6 +5522,18 @@ export const usersAPI = {
         return optimizeProfileImageUrl(response.data?.profileImageUrl) || getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${extension}`);
     },
 
+    uploadUserProfileImage: async (userId, file) => {
+        if (!userId || !file) throw new Error('User and image file are required');
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await apiClient.post(`/users/${encodeURIComponent(userId)}/profile-image`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        const extension = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        setCachedAvatarEntry(userId, { ext: extension, missingAt: null });
+        return optimizeProfileImageUrl(response.data.profileImageUrl);
+    },
+
     getMyCredentials: async () => {
         const response = await apiClient.get('/users/me/credentials');
         return response.data || [];

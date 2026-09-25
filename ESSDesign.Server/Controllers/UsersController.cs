@@ -251,6 +251,35 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPost("{userId}/profile-image")]
+        [RequestSizeLimit(8 * 1024 * 1024)]
+        public async Task<ActionResult> UploadUserProfileImage(string userId, [FromForm] IFormFile file)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null) return Unauthorized(new { error = "Not authenticated" });
+                if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" });
+                if (!Guid.TryParse(userId, out _)) return BadRequest(new { error = "Invalid user ID" });
+                if (file == null || file.Length == 0 || file.Length > 5 * 1024 * 1024)
+                    return BadRequest(new { error = "Profile image must be between 1 byte and 5 MB" });
+                if (!new[] { "image/jpeg", "image/png", "image/webp" }.Contains(file.ContentType.ToLowerInvariant()))
+                    return BadRequest(new { error = "Choose a JPEG, PNG or WebP profile photo" });
+                var profileImageUrl = await _supabaseService.UploadProfileImageAsync(userId, file);
+                return Ok(new { profileImageUrl });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading profile image for {UserId}", userId);
+                return StatusCode(500, new { error = "Unable to upload profile photo" });
+            }
+        }
+
         [HttpGet("me/credentials")]
         [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
         public async Task<ActionResult<List<EmployeeCredentialResponse>>> GetMyCredentials()

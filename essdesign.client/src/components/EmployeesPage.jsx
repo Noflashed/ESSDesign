@@ -94,14 +94,14 @@ function normalizeAvatarSource(value) {
 
 function getAvatarCandidates(user) {
     const rawValues = [
+        user?.profileImageUrl,
+        user?.profile_image_url,
+        user?.ProfileImageUrl,
         user?.avatarUrl,
         user?.avatar_url,
         user?.AvatarUrl,
         user?.picture,
         user?.Picture,
-        user?.profileImageUrl,
-        user?.profile_image_url,
-        user?.ProfileImageUrl,
         user?.profileImage,
         user?.profile_image,
         user?.ProfileImage,
@@ -256,7 +256,7 @@ function formatEmployeeCredentialClass(config, value) {
 }
 
 async function loadEmployeeCredentialImage(userId, credential) {
-    if (!userId || !credential?.hasFrontImage) return credential;
+    if (!userId || !credential?.hasFrontImage || credential.frontImageUrl) return credential;
     try {
         const frontImageUrl = await usersAPI.getCredentialImageUrl(userId, credential.credentialType, credential.updatedAt);
         return { ...credential, frontImageUrl, frontImageLoadFailed: false };
@@ -517,6 +517,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [savingAppUser, setSavingAppUser] = useState(false);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
     const [inviteSending, setInviteSending] = useState(false);
     const [error, setError] = useState('');
     const [inviteMessage, setInviteMessage] = useState('');
@@ -1205,6 +1206,31 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const selectedInfoStatus = selectedInfoEntry ? getAccountStatus(selectedInfoEntry) : null;
     const selectedEmployeeProfile = selectedInfoEntry?.appUser || null;
     const selectedProfileUserId = selectedInfoEntry?.appUser?.id || selectedInfoEntry?.employee?.linkedAuthUserId || '';
+    const uploadEmployeePhoto = async (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file || !selectedProfileUserId) return;
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024 || !file.size) {
+            setError('Choose a JPEG, PNG or WebP photo up to 5 MB.');
+            return;
+        }
+        const userId = selectedProfileUserId;
+        setUploadingPhoto(true);
+        setError('');
+        try {
+            const profileImageUrl = await usersAPI.uploadUserProfileImage(userId, file);
+            setProfileImageUrls((current) => ({ ...current, [userId]: profileImageUrl }));
+            setAppUsers((current) => current.map((user) => user.id === userId ? { ...user, profileImageUrl } : user));
+            if (userId === currentUserId) {
+                const refreshedUser = await authAPI.refreshCurrentUser();
+                onCurrentUserUpdated?.({ ...refreshedUser, profileImageUrl });
+            }
+        } catch (uploadError) {
+            setError(uploadError.response?.data?.error || uploadError.message || 'Unable to upload profile photo.');
+        } finally {
+            setUploadingPhoto(false);
+        }
+    };
     const selectedAppUserIsTruckDevice = isTruckRole(selectedInfoEntry?.appUser?.role);
     const isEditingEmployee = selectedInfoEntry?.type === 'employee' && showModal && !!form.id;
     const isEditingAppUser = selectedInfoEntry?.type === 'app-user' && showAppUserModal;
@@ -1269,7 +1295,13 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     </div>
                                     <header className="employee-profile-main-header">
                                         <div className="employee-profile-main-identity">
-                                            <div className="employee-profile-main-avatar"><EmployeeAvatar entry={selectedInfoEntry} /></div>
+                                            <div className="employee-profile-photo-control">
+                                                <div className="employee-profile-main-avatar"><EmployeeAvatar entry={selectedInfoEntry} /></div>
+                                                {selectedProfileUserId ? <label className="employee-profile-photo-change">
+                                                    {uploadingPhoto ? 'Uploading...' : 'Change photo'}
+                                                    <input type="file" aria-label="Change employee profile photo" accept="image/jpeg,image/png,image/webp" disabled={uploadingPhoto || previewMode} onChange={uploadEmployeePhoto} />
+                                                </label> : <small>Link an account to add a photo</small>}
+                                            </div>
                                             <div className="employee-profile-main-copy">
                                                 <span className="employee-profile-eyebrow">Employee profile</span>
                                                 {isInlineEditing ? (

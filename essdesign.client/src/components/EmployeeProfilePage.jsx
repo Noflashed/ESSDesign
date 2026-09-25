@@ -196,7 +196,7 @@ function formatCredentialClass(config, value) {
 }
 
 async function loadCredentialImage(userId, credential) {
-    if (!userId || !credential?.hasFrontImage) return credential;
+    if (!userId || !credential?.hasFrontImage || credential.frontImageUrl) return credential;
     try {
         const frontImageUrl = await usersAPI.getCredentialImageUrl(userId, credential.credentialType, credential.updatedAt);
         return { ...credential, frontImageUrl, frontImageLoadFailed: false };
