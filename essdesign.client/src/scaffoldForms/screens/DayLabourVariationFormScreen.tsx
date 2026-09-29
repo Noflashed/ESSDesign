@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/screens/DayLabourVariationFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import DayLabourTransportField from '../components/DayLabourTransportField';
 import {formatDayLabourTotal, MAX_DAY_LABOUR_ROWS} from '../utils/dayLabourTotal';
 import {formatDayLabourDate} from '../utils/dayLabourDate';
 import {clientProjectName} from '../utils/clientProjectName';
@@ -1777,7 +1778,10 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
 
       <View style={styles.phoneSection}>
         <Text style={styles.phoneSectionTitle}>Transport & Materials</Text>
-        {renderPhoneField('Transport Included', form.transportIncluded, value => updateField('transportIncluded', value))}
+        <View style={styles.phoneField}>
+          <Text style={styles.phoneFieldLabel}>Transport Included</Text>
+          <DayLabourTransportField value={form.transportIncluded} onChange={value => updateField('transportIncluded', value)} readOnly={isReadOnly} />
+        </View>
         <Text style={styles.phoneSubsectionTitle}>Engineer Required</Text>
         <View style={styles.phoneChoiceGrid}>
           <View style={styles.phoneChoiceGridItem}>
@@ -2222,7 +2226,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
             <View style={styles.transportRow}>
               <View style={styles.transportLeftGroup}>
                 <Text style={styles.transportLabel}>TRANSPORT INCLUDED :</Text>
-                {renderPdfTextInput(form.transportIncluded, value => updateField('transportIncluded', value), {style: styles.transportInput})}
+                <DayLabourTransportField value={form.transportIncluded} onChange={value => updateField('transportIncluded', value)} readOnly={isReadOnly} compact />
               </View>
               <View style={styles.transportEngineerGroup}>
                 <Text style={styles.transportLabel}>ENGINEER REQUIRED</Text>

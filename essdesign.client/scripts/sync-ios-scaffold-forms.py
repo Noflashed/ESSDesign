@@ -7,7 +7,7 @@ source = Path(sys.argv[1]).resolve()
 client = Path(__file__).resolve().parents[1]
 dest = client / 'src/scaffoldForms'
 files = '''screens/DayLabourVariationFormScreen.tsx screens/HandoverCertificateFormScreen.tsx screens/ScaffTagFormScreen.tsx
-components/AppTopBar.tsx components/CompanyEntitySelector.tsx components/SignaturePadModal.tsx
+components/DayLabourTransportField.tsx components/AppTopBar.tsx components/CompanyEntitySelector.tsx components/SignaturePadModal.tsx
 components/ProjectDataFormDemoModal.tsx components/ProjectDataFormShareModal.tsx
 components/ScaffoldRecordLinkControls.tsx components/DrawingRegisterPickerModal.tsx
 services/supabaseHandoverCertificates.ts services/supabaseScaffTags.ts services/scaffTagPdfRenderer.ts
