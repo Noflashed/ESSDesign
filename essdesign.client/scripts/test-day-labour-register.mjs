@@ -112,6 +112,19 @@ try {
  const field = label => page.getByText(label,{exact:true}).locator('..').locator('input').first();
  await field('FORM REFERENCE NAME:').fill('North elevation variation');
  await field('REQUESTED BY:').fill('Site Manager');
+ await page.getByRole('button',{name:'Choose transport option',exact:true}).click();
+ await page.getByRole('button',{name:'3T Truck - $400',exact:true}).click();
+ await page.getByRole('button',{name:'3T Truck - $400',exact:true}).waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'Transport included selection',exact:true}).getByText('3T Truck - $400',{exact:true}).waitFor();
+ assert.equal(await page.getByRole('textbox',{name:'Custom transport included',exact:true}).count(),0);
+ await page.getByRole('button',{name:'Choose transport option',exact:true}).click();
+ await page.getByRole('button',{name:'12T Truck - $800',exact:true}).click();
+ await page.getByRole('button',{name:'12T Truck - $800',exact:true}).waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'Transport included selection',exact:true}).getByText('12T Truck - $800',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Choose transport option',exact:true}).click();
+ await page.getByRole('button',{name:'Custom',exact:true}).click();
+ await page.getByRole('textbox',{name:'Custom transport included',exact:true}).fill('5T Truck - $600');
+
  rows.set('handover-test',{id:'handover-test',form_type:'handover-certificates',builder_id:'builder-test',project_id:'project-test',payload:{id:'handover-test',builderId:'builder-test',projectId:'project-test',inspectionNumber:'H-00234',formReferenceName:'North handover'}});
  await page.getByRole('button',{name:'Search handover documents',exact:true}).click();
  await page.getByText('North handover',{exact:true}).click();
@@ -179,6 +192,8 @@ try {
  assert.ok(saved);
  assert.equal(saved.companyEntityId,companyEntity);
  assert.equal(saved.photoSlots.length,1);
+ assert.equal(saved.transportIncluded,'5T Truck - $600');
+ assert.ok(pdf.includes('(5T Truck - $600)'),'PDF exports the custom transport value');
  assert.equal(saved.labourRows.length,7);
  assert.equal(saved.labourRows[0].total,'24');
  for(let index=1;index<7;index++) {
@@ -198,6 +213,7 @@ try {
  await page.getByRole('button',{name:'North elevation variation',exact:true}).click();
  await page.getByRole('button',{name:'Share day labour form'}).waitFor();
  assert.equal(await field('REQUESTED BY:').inputValue(),'Site Manager');
+ assert.equal(await page.getByRole('textbox',{name:'Custom transport included',exact:true}).inputValue(),'5T Truck - $600');
  assert.equal(await overtime.getAttribute('aria-checked'),'true');
  assert.equal(await field('TOTAL:').inputValue(),'24 OT');
  assert.equal(await page.getByText(selectedDisplay,{exact:true}).count(),8);
