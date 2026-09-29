@@ -57,7 +57,7 @@ export default function DayLabourTransportField({value, onChange, readOnly = fal
           disabled={readOnly}
           onPress={() => setOpen(true)}
           style={styles.arrow}>
-          <Feather name="chevron-down" size={compact ? 16 : 20} color="#222222" />
+          <Feather name="chevron-down" size={compact ? 24 : 28} color="#111111" />
         </Pressable>
       </View>
       <Modal visible={open && !readOnly} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
   selection: {flex: 1, minWidth: 0, paddingHorizontal: 7, alignSelf: 'stretch', justifyContent: 'center'},
   text: {color: '#222222', fontSize: 15},
   compactText: {fontSize: 13},
-  arrow: {alignSelf: 'stretch', paddingHorizontal: 5, justifyContent: 'center'},
+  arrow: {alignSelf: 'stretch', minWidth: 36, paddingHorizontal: 4, justifyContent: 'center', alignItems: 'center', borderLeftWidth: 1, borderLeftColor: '#777777', backgroundColor: '#D9D9D9'},
   backdrop: {flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 24},
   menu: {width: '100%', maxWidth: 360, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16},
   title: {color: '#111111', fontSize: 18, fontWeight: '700', marginBottom: 8},
