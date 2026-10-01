@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import FolderBrowser from './components/FolderBrowser';
 import useProfilePhoto from './hooks/useProfilePhoto';
 import DrawingRegisterPage from './components/DrawingRegisterPage';
+import ESSMarkupPage from './components/ESSMarkupPage';
+import { canAccessEssMarkup, resolveMarkupPage, designNavigationFor } from './utils/markupAccess';
 import ProjectDataRegisterPage from './components/ProjectDataRegisterPage';
 import ScaffoldDashboardPage from './components/ScaffoldDashboardPage';
 import { ACCOUNTS_NAV_ITEMS, resolveAccountsPage } from './utils/accountsAccess';
@@ -211,13 +213,8 @@ function NavPageIcon({ pageKey, size = 18 }) {
 
 const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
 const MATERIAL_ORDERING_PAGE_KEYS = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived']);
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'scaffold-register', 'scaffold-dashboard', 'safety', 'safety-handover-register', 'safety-day-labour-register', 'safety-pre-start-register', 'safety-scaff-tag-register', 'safety-qr-code-register', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news', 'ess-ai', 'ai-feedback']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'scaffold-register', 'scaffold-dashboard', 'safety', 'safety-handover-register', 'safety-day-labour-register', 'safety-pre-start-register', 'safety-scaff-tag-register', 'safety-qr-code-register', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-markup', 'drawing-register', 'ess-news', 'ess-ai', 'ai-feedback']);
 const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'drawing-register', 'site-information', 'scaffold-register', 'ess-ai', 'profile', 'settings']);
-const DESIGN_NAV_ITEM = {
-    key: 'design',
-    label: 'ESS Design',
-    children: [{ key: 'drawing-register', label: 'Drawing Register' }],
-};
 const PROJECT_DATA_NAV_ITEM = {
     key: 'safety',
     label: 'Project data',
@@ -698,9 +695,10 @@ function App() {
     const [employeeLinkAttempted, setEmployeeLinkAttempted] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [pageState, setCurrentPage] = useState('landing');
+    const markupDraft = useRef({});
     const isAccounts = user?.role === 'accounts';
     const roleSafePage = resolveProjectDataPage(pageState, user?.role);
-    const currentPage = isAccounts ? resolveAccountsPage(roleSafePage) : roleSafePage;
+    const currentPage = resolveMarkupPage(isAccounts ? resolveAccountsPage(roleSafePage) : roleSafePage, user);
     const [pendingAiQuestion, setPendingAiQuestion] = useState(null);
     const [showNavDrawer, setShowNavDrawer] = useState(false);
     const [avatarProfileUser, setAvatarProfileUser] = useState(null);
@@ -729,7 +727,7 @@ function App() {
         ? ACCOUNTS_NAV_ITEMS
         : isScaffoldDesigner
         ? [
-            DESIGN_NAV_ITEM,
+            designNavigationFor(user),
             { key: 'site-information', label: 'Site Registry' },
             { key: 'scaffold-register', label: 'Scaffold Register' },
             { key: 'scaffold-dashboard', label: 'Scaffold Dashboard' },
@@ -740,7 +738,7 @@ function App() {
         : isTransportManagement
         ? [{ key: 'truck-schedule', label: 'ESS Transport' }, { key: 'ess-ai', label: 'ESS AI' }]
         : [
-            DESIGN_NAV_ITEM,
+            designNavigationFor(user),
             { key: 'ess-ai', label: 'ESS AI' },
             { key: 'site-information', label: 'Site Registry' },
             { key: 'scaffold-register', label: 'Scaffold Register' },
@@ -1301,6 +1299,7 @@ function App() {
     };
 
     const handleLogout = async () => {
+        markupDraft.current = {};
         try {
             setShowUserMenu(false);
             await authAPI.signOut();
@@ -1763,6 +1762,11 @@ function App() {
 
         if (currentPage === 'ess-news' && isAdmin) {
             return <ESSNewsPage />;
+        }
+
+        if (currentPage === 'ess-markup' && canAccessEssMarkup(user)) {
+            if (markupDraft.current.userId !== user?.id) markupDraft.current = { userId: user?.id };
+            return <ESSMarkupPage draft={markupDraft.current} />;
         }
 
         if (currentPage === 'drawing-register') {

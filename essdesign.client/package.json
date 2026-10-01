@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:markup": "node scripts/test-markup-access.mjs && node scripts/test-markup-geometry.mjs && node scripts/test-markup-snaps.mjs && node scripts/test-markup-selection-geometry.mjs && node scripts/test-ess-markup.mjs && node scripts/test-markup-lines.mjs && node scripts/test-markup-selection.mjs && node scripts/test-markup-move.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
