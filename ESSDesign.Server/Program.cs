@@ -3,6 +3,8 @@ using ESSDesign.Server.Services;
 using ESSDesign.Server.Services.Assistant;
 using Supabase;
 using Resend;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +16,17 @@ builder.WebHost.ConfigureKestrel(options =>
 
 // Add services to the container
 builder.Services.AddControllers();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    // A global cap also bounds abuse across rotating IP addresses.
+    options.AddFixedWindowLimiter("password-recovery", policy =>
+    {
+        policy.PermitLimit = 20;
+        policy.Window = TimeSpan.FromMinutes(1);
+        policy.QueueLimit = 0;
+    });
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -205,6 +218,7 @@ app.UseRouting();
 
 // CORS (kept as backup for endpoint-level policies)
 app.UseCors("AllowReact");
+app.UseRateLimiter();
 
 // Authorization
 app.UseAuthorization();

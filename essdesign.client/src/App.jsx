@@ -10,6 +10,7 @@ import { ACCOUNTS_NAV_ITEMS, resolveAccountsPage } from './utils/accountsAccess'
 import { resolveProjectDataPage, projectDataNavForRole } from './utils/projectDataAccess';
 import ScaffoldRegisterPage from './components/ScaffoldRegisterPage';
 import Login from './components/Login';
+import PasswordRecovery from './components/PasswordRecovery';
 import SignUp from './components/SignUp';
 import RegistrationSuccess from './components/RegistrationSuccess';
 import RegistrationConfirmed from './components/RegistrationConfirmed';
@@ -49,6 +50,7 @@ const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
 const getAuthViewFromUrl = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const auth = urlParams.get('auth');
+    if (auth === 'forgot-password' || auth === 'reset-password') return auth;
 
     if (auth === 'signup-confirmed') {
         return 'signup-confirmed';
@@ -1026,6 +1028,10 @@ function App() {
     }, [avatarDebugEnabled, isAuthenticated, user?.id, user?.Id, user?.userId, user?.user_id, user?.sub, user?.employeeId, user?.EmployeeId, user?.employee_id, user?.email]);
 
     const checkAuth = async () => {
+        if (['forgot-password', 'reset-password'].includes(getAuthViewFromUrl())) {
+            setLoading(false);
+            return;
+        }
         const callbackResult = authAPI.consumeAuthCallbackFromUrl?.();
         const authUrlParams = new URLSearchParams(window.location.search);
         const emailFromUrl = authUrlParams.get('email') || '';
@@ -1415,6 +1421,7 @@ function App() {
 
     // Browser back/forward button support
     useEffect(() => {
+        if (['forgot-password', 'reset-password'].includes(getAuthViewFromUrl())) return;
         const urlParams = new URLSearchParams(window.location.search);
         const fallbackPage = isEmployeePortalRole
             ? 'employee-home'
@@ -1826,6 +1833,10 @@ function App() {
                 <LoadingBrandmark label="Loading ESS Design" />
             </div>
         );
+    }
+
+    if (authView === 'forgot-password' || authView === 'reset-password') {
+        return <PasswordRecovery reset={authView === 'reset-password'} />;
     }
 
     if (authView === 'signup-confirmed') {

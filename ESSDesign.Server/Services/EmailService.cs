@@ -30,6 +30,25 @@ namespace ESSDesign.Server.Services
             _logger = logger;
         }
 
+        public async Task SendPasswordRecoveryAsync(string recipientEmail, string recoveryLink)
+        {
+            if (_resend == null) throw new InvalidOperationException("Password recovery requires Resend configuration.");
+            var safeLink = HttpUtility.HtmlAttributeEncode(recoveryLink);
+            var html = $"""
+                <div style="background:#f3f4f6;padding:40px 20px;font-family:Arial,sans-serif;color:#18212f">
+                  <div style="max-width:520px;margin:auto;background:white;border-radius:16px;padding:36px">
+                    <p style="font-size:12px;letter-spacing:2px;color:#687383">ESS DESIGN · SECURE ACCESS</p>
+                    <h1 style="font-size:28px">Reset your password</h1>
+                    <p>Choose a new password to get back to your ESS Design account.</p>
+                    <p style="margin:30px 0"><a href="{safeLink}" style="background:#18212f;color:white;padding:14px 24px;border-radius:8px;text-decoration:none">Choose a new password</a></p>
+                    <p style="color:#687383;font-size:14px">This link expires and can only be used once. If you did not request this, you can ignore this email.</p>
+                    <p style="color:#687383;font-size:12px">ErectSafe Scaffolding</p>
+                  </div>
+                </div>
+                """;
+            await SendEmailWithRetryAsync(recipientEmail, "Reset your ESS Design password", html);
+        }
+
         public async Task SendUserInviteAsync(string recipientEmail, string inviterName)
         {
             if (string.IsNullOrWhiteSpace(recipientEmail))

@@ -1069,3 +1069,14 @@
         min-width: 106px;
     }
 }
+.auth-recovery-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 24px;
+    font-size: 14px;
+}
+.auth-recovery-links a, .auth-label-row a {
+    color: inherit;
+    text-underline-offset: 3px;
+}

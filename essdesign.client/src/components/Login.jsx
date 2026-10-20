@@ -61,7 +61,7 @@ function Login({ onLoginSuccess }) {
                 <div className="auth-field">
                     <div className="auth-label-row">
                         <label htmlFor="login-password">Password</label>
-                        <span>Case sensitive</span>
+                        <a href="/?auth=forgot-password">Forgot password?</a>
                     </div>
                     <input
                         id="login-password"

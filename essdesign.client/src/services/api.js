@@ -296,6 +296,12 @@ apiClient.interceptors.response.use(
 );
 
 export const authAPI = {
+    forgotPassword: async (email) => (await apiClient.post('/auth/password/forgot', { email })).data,
+    resetPassword: async (tokenHash, password) => {
+        const response = await apiClient.post('/auth/password/reset', { tokenHash, password });
+        clearStoredAuth();
+        return response.data;
+    },
     signUp: async (profile) => {
         const formData = new FormData();
         Object.entries(profile || {}).forEach(([key, value]) => {
