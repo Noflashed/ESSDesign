@@ -36,7 +36,7 @@ public class PasswordRecoveryTests
     public async Task InvalidRecoveryNeverUpdatesPassword()
     {
         var provider = new Provider((HttpStatusCode.Forbidden, "{}"));
-        Assert.IsType<BadRequestObjectResult>(await Controller(provider).Reset(new("expired", "new-password")));
+        Assert.IsType<BadRequestObjectResult>(await Controller(provider).Verify(new("expired")));
         Assert.Single(provider.Requests);
         Assert.Contains("\"type\":\"recovery\"", provider.Requests[0].Body);
     }
@@ -45,10 +45,39 @@ public class PasswordRecoveryTests
     public async Task UpdateUsesVerifiedSessionAndRevokesSessions()
     {
         var provider = new Provider((HttpStatusCode.OK, "{\"access_token\":\"verified-session\"}"), (HttpStatusCode.OK, "{}"), (HttpStatusCode.NoContent, ""));
-        Assert.IsType<OkObjectResult>(await Controller(provider).Reset(new("one-use-token", "new-password")));
+        var verification = Assert.IsType<OkObjectResult>(await Controller(provider).Verify(new("one-use-token")));
+        var session = Assert.IsType<PasswordRecoveryController.RecoverySession>(verification.Value);
+        Assert.IsType<OkObjectResult>(await Controller(provider).Reset(new(session.AccessToken, "new-password")));
         Assert.Equal("/auth/v1/user", provider.Requests[1].Path);
         Assert.Equal("verified-session", provider.Requests[1].Bearer);
         Assert.Equal("/auth/v1/logout?scope=global", provider.Requests[2].Path);
+    }
+
+    [Theory]
+    [InlineData("same_password", "different")]
+    [InlineData("weak_password", "stronger")]
+    public async Task RejectedPasswordCanBeRetriedWithoutReverifyingLink(string code, string expected)
+    {
+        var provider = new Provider((HttpStatusCode.OK, "{\"access_token\":\"verified-session\"}"),
+            (HttpStatusCode.UnprocessableEntity, $"{{\"code\":\"{code}\"}}"),
+            (HttpStatusCode.OK, "{}"), (HttpStatusCode.NoContent, ""));
+        var verification = Assert.IsType<OkObjectResult>(await Controller(provider).Verify(new("one-use-token")));
+        var session = Assert.IsType<PasswordRecoveryController.RecoverySession>(verification.Value);
+        var rejected = Assert.IsType<BadRequestObjectResult>(await Controller(provider).Reset(new(session.AccessToken, "old-password")));
+        Assert.Contains(expected, rejected.Value!.ToString());
+        Assert.IsType<OkObjectResult>(await Controller(provider).Reset(new(session.AccessToken, "better-password")));
+        Assert.Single(provider.Requests.Where(r => r.Path == "/auth/v1/verify"));
+        Assert.Equal(2, provider.Requests.Count(r => r.Path == "/auth/v1/user" && r.Bearer == session.AccessToken));
+        Assert.Equal("/auth/v1/logout?scope=global", provider.Requests.Last().Path);
+    }
+
+    [Fact]
+    public async Task ExpiredSessionCannotUpdatePassword()
+    {
+        var provider = new Provider((HttpStatusCode.Unauthorized, "{}"));
+        var result = Assert.IsType<BadRequestObjectResult>(await Controller(provider).Reset(new("expired-session", "new-password")));
+        Assert.Contains("expired", result.Value!.ToString());
+        Assert.Single(provider.Requests);
     }
 
     [Fact]

@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import AuthShell from './AuthShell';
 import { authAPI } from '../services/api';
 
 export default function PasswordRecovery({ reset = false }) {
+    // Keep recovery credentials separate from the normal app session and persistent storage.
+    const recoveryAccessToken = useRef(null);
     const [tokenHash] = useState(() => {
         const token = new URLSearchParams(window.location.hash.slice(1)).get('token_hash') || '';
         return token;
@@ -28,7 +30,15 @@ export default function PasswordRecovery({ reset = false }) {
         }
         setBusy(true);
         try {
-            if (reset) await authAPI.resetPassword(tokenHash, password);
+            if (reset) {
+                if (!recoveryAccessToken.current) {
+                    const session = await authAPI.verifyPasswordRecovery(tokenHash);
+                    if (!session.accessToken) throw new Error('Missing recovery session');
+                    recoveryAccessToken.current = session.accessToken;
+                }
+                await authAPI.resetPassword(recoveryAccessToken.current, password);
+                recoveryAccessToken.current = null;
+            }
             else await authAPI.forgotPassword(email.trim());
             setPassword('');
             setConfirmation('');

@@ -297,8 +297,9 @@ apiClient.interceptors.response.use(
 
 export const authAPI = {
     forgotPassword: async (email) => (await apiClient.post('/auth/password/forgot', { email })).data,
-    resetPassword: async (tokenHash, password) => {
-        const response = await apiClient.post('/auth/password/reset', { tokenHash, password });
+    verifyPasswordRecovery: async (tokenHash) => (await apiClient.post('/auth/password/verify', { tokenHash })).data,
+    resetPassword: async (accessToken, password) => {
+        const response = await apiClient.post('/auth/password/reset', { accessToken, password });
         clearStoredAuth();
         return response.data;
     },

@@ -15,7 +15,9 @@ public class PasswordRecoveryController(IHttpClientFactory clients, IConfigurati
     EmailService email, ILogger<PasswordRecoveryController> logger) : ControllerBase
 {
     public record ForgotRequest([Required, EmailAddress, MaxLength(254)] string Email);
-    public record ResetRequest([Required, MaxLength(2048)] string TokenHash,
+    public record VerifyRequest([Required, MaxLength(2048)] string TokenHash);
+    public record RecoverySession(string AccessToken);
+    public record ResetRequest([Required, MaxLength(16384)] string AccessToken,
         [Required, MinLength(8), MaxLength(128)] string Password);
 
     private HttpClient AuthClient(bool admin = false)
@@ -58,8 +60,8 @@ public class PasswordRecoveryController(IHttpClientFactory clients, IConfigurati
         return Ok(new { message = "If an account exists for that email, a password reset link will arrive shortly." });
     }
 
-    [HttpPost("reset")]
-    public async Task<IActionResult> Reset(ResetRequest request)
+    [HttpPost("verify")]
+    public async Task<IActionResult> Verify(VerifyRequest request)
     {
         Response.Headers.CacheControl = "no-store";
         try
@@ -71,10 +73,40 @@ public class PasswordRecoveryController(IHttpClientFactory clients, IConfigurati
             using var session = JsonDocument.Parse(await verification.Content.ReadAsStringAsync());
             var token = session.RootElement.GetProperty("access_token").GetString();
             if (string.IsNullOrWhiteSpace(token)) throw new InvalidOperationException();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return Ok(new RecoverySession(token));
+        }
+        catch (Exception)
+        {
+            logger.LogError("Password recovery verification failed.");
+            return StatusCode(503, new { error = "Unable to verify your reset link. Please try again." });
+        }
+    }
+
+    [HttpPost("reset")]
+    public async Task<IActionResult> Reset(ResetRequest request)
+    {
+        Response.Headers.CacheControl = "no-store";
+        try
+        {
+            using var client = AuthClient();
+            // Supabase validates this user session. Never use the admin key for updates.
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", request.AccessToken);
             using var update = await client.PutAsJsonAsync("user", new { password = request.Password });
             if (!update.IsSuccessStatusCode)
-                return BadRequest(new { error = "The password could not be accepted. Request a new link and choose a different, stronger password." });
+            {
+                if (update.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                    return BadRequest(new { error = "Your reset session has expired. Please request a new link." });
+                if (update.StatusCode == HttpStatusCode.TooManyRequests)
+                    return StatusCode(429, new { error = "Too many attempts. Please wait a minute and try again." });
+                using var failure = JsonDocument.Parse(await update.Content.ReadAsStringAsync());
+                var code = failure.RootElement.TryGetProperty("code", out var value) ? value.GetString() : null;
+                var message = code == "same_password"
+                    ? "Choose a password different from your current password, then try again."
+                    : code == "weak_password"
+                    ? "Choose a stronger password with uppercase and lowercase letters, numbers and symbols, then try again."
+                    : "The password could not be accepted. Choose a different, stronger password and try again.";
+                return BadRequest(new { error = message });
+            }
             // Revoke refresh sessions, including the temporary recovery session.
             using var logout = await client.PostAsync("logout?scope=global", null);
             if (!logout.IsSuccessStatusCode) logger.LogWarning("Recovery session revocation returned HTTP {Status}", (int)logout.StatusCode);
@@ -83,7 +115,7 @@ public class PasswordRecoveryController(IHttpClientFactory clients, IConfigurati
         catch (Exception)
         {
             logger.LogError("Password recovery update failed.");
-            return StatusCode(503, new { error = "Unable to reset your password. Please request a new link and try again." });
+            return StatusCode(503, new { error = "Unable to reset your password right now. Please try again." });
         }
     }
 }

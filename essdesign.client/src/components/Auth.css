@@ -1076,7 +1076,32 @@
     margin-top: 24px;
     font-size: 14px;
 }
-.auth-recovery-links a, .auth-label-row a {
+.auth-recovery-links a {
     color: inherit;
     text-underline-offset: 3px;
+}
+
+.auth-label-row .auth-forgot-password {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    margin-block: -4px;
+    border-radius: 4px;
+    color: var(--auth-muted);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.25;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color .16s ease;
+}
+
+.auth-label-row .auth-forgot-password:hover {
+    color: var(--auth-accent);
+}
+
+.auth-label-row .auth-forgot-password:focus-visible {
+    outline: 2px solid var(--auth-accent);
+    outline-offset: 4px;
+    color: var(--auth-accent);
 }
