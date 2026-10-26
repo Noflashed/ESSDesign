@@ -278,6 +278,8 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     const dirtyRowIdsRef = useRef(new Set());
     const deletedRowIdsRef = useRef(new Set());
     const originalDesignNamesRef = useRef(new Map());
+    const originalProjectRowsRef = useRef(new Map());
+    const movingProjectRowIdsRef = useRef(new Set());
     const copyResetTimerRef = useRef(null);
     const canSave = canEdit || canAddDrawing;
 
@@ -323,7 +325,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     }, []);
 
     useEffect(() => {
-        if (!loading) localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+        if (!loading) localStorage.setItem(STORAGE_KEY, JSON.stringify(rows.map(row => originalProjectRowsRef.current.get(row.id) || row)));
     }, [rows, loading]);
 
     useEffect(() => {
@@ -336,6 +338,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         if (sharedSaveEnabledRef.current && dirtyRowIdsRef.current.size > 0) {
             const activeDirtyRows = rowsRef.current.filter(row =>
                 dirtyRowIdsRef.current.has(row.id)
+                && !originalProjectRowsRef.current.has(row.id)
                 && !deletedRowIdsRef.current.has(row.id));
             safetyProjectsAPI.saveDrawingRegisterEntries(activeDirtyRows).catch(error => {
                 console.error('Final shared Drawing Register save failed', error);
@@ -616,7 +619,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         }
     };
     const updateRow = (id, key, value) => {
-        if (!canEdit) return;
+        if (!canEdit || originalProjectRowsRef.current.has(id)) return;
         if (key === 'design') {
             if (!originalDesignNamesRef.current.has(id)) {
                 const currentRow = rows.find(row => row.id === id);
@@ -671,21 +674,52 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         }
     };
     const updateRowClient = (id, client) => {
-        if (!canEdit) return;
+        if (!canEdit || movingProjectRowIdsRef.current.has(id) || originalDesignNamesRef.current.has(id)) return;
+        const row = rows.find(item => item.id === id);
+        if (!row || row.client === client) return;
+        if (!originalProjectRowsRef.current.has(id)) originalProjectRowsRef.current.set(id, row);
+        setFolderSyncingRowIds(current => new Set(current).add(id));
         const builder = builders.find(item => item.name === client);
-        dirtyRowIdsRef.current.add(id);
         setRows(current => current.map(row => row.id === id ? { ...row, builderId: builder?.id || '', projectId: '', client, project: '' } : row));
-        setSiteLinkError('');
+        setSiteLinkError('Select a project to finish moving this drawing.');
     };
-    const updateRowProject = (id, projectName) => {
-        if (!canEdit) return;
+    const updateRowProject = async (id, projectName) => {
+        if (!canEdit || movingProjectRowIdsRef.current.has(id) || originalDesignNamesRef.current.has(id)) return;
         const row = rows.find(item => item.id === id);
         const builder = builders.find(item => item.name === row?.client);
         const project = builder?.projects.find(item => item.name === projectName);
-        if (!row || !builder || projectName && !project) return;
-        dirtyRowIdsRef.current.add(id);
-        setRows(current => current.map(item => item.id === id ? { ...item, projectId: project?.id || '', project: projectName } : item));
-        setSiteLinkError('');
+        if (!row || !builder || !project || row.projectId === project.id) return;
+        const originalRow = originalProjectRowsRef.current.get(id) || row;
+        originalProjectRowsRef.current.set(id, originalRow);
+        movingProjectRowIdsRef.current.add(id);
+        setFolderSyncingRowIds(current => new Set(current).add(id));
+        try {
+            const targetProjectFolderId = normalizeFolderId(project.designFolderId);
+            if (!targetProjectFolderId) throw new Error(`${project.name} does not have an ESS Design directory linked in the Site Registry.`);
+            await foldersAPI.moveDrawingRegisterFolder({
+                ...drawingFolderLookup(originalRow),
+                targetProjectFolderId
+            });
+            dirtyRowIdsRef.current.add(id);
+            setRows(current => current.map(item => item.id === id ? {
+                ...item, builderId: builder.id, client: builder.name, projectId: project.id, project: project.name
+            } : item));
+            setSiteLinkError('');
+        } catch (error) {
+            setRows(current => current.map(item => item.id === id ? {
+                ...item, builderId: originalRow.builderId, client: originalRow.client,
+                projectId: originalRow.projectId, project: originalRow.project
+            } : item));
+            setSiteLinkError(`The drawing project was not changed. ${error?.response?.data?.error || error.message || 'The drawing folder could not be moved.'}`);
+        } finally {
+            originalProjectRowsRef.current.delete(id);
+            movingProjectRowIdsRef.current.delete(id);
+            setFolderSyncingRowIds(current => {
+                const next = new Set(current);
+                next.delete(id);
+                return next;
+            });
+        }
     };
     const deleteRow = async (row, folderId = null) => {
         if (!canEdit || deletingRowId) return;
@@ -827,12 +861,12 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     const renderCell = (row, key) => {
         if (key === 'client') {
             if (!canEdit) return <span className="register-read-only-value" title={row.client}>{row.client}</span>;
-            return <span className="register-table-select-wrap"><select className="register-table-select" value={row.client} title={row.client || 'Select client'} onChange={event => updateRowClient(row.id, event.target.value)}><option value="">Select client</option>{builders.map(builder => <option key={builder.id} value={builder.name}>{builder.name}</option>)}</select><ChevronDown aria-hidden="true" /></span>;
+            return <span className="register-table-select-wrap"><select className="register-table-select" value={row.client} title={row.client || 'Select client'} onChange={event => updateRowClient(row.id, event.target.value)} disabled={movingProjectRowIdsRef.current.has(row.id) || originalDesignNamesRef.current.has(row.id)}><option value="">Select client</option>{builders.map(builder => <option key={builder.id} value={builder.name}>{builder.name}</option>)}</select><ChevronDown aria-hidden="true" /></span>;
         }
         if (key === 'project') {
             if (!canEdit) return <span className="register-read-only-value" title={row.project}>{row.project}</span>;
             const projects = getBuilderProjects(row.client);
-            return <span className="register-table-select-wrap"><select className="register-table-select" value={row.project} title={row.project || (row.client ? 'Select project' : 'Select client first')} onChange={event => updateRowProject(row.id, event.target.value)} disabled={!row.client}><option value="">{row.client ? 'Select project' : 'Select client first'}</option>{projects.map(project => <option key={project.id} value={project.name}>{project.name}</option>)}</select><ChevronDown aria-hidden="true" /></span>;
+            return <span className="register-table-select-wrap"><select className="register-table-select" value={row.project} title={row.project || (row.client ? 'Select project' : 'Select client first')} onChange={event => updateRowProject(row.id, event.target.value)} disabled={!row.client || movingProjectRowIdsRef.current.has(row.id) || originalDesignNamesRef.current.has(row.id)}><option value="" disabled>{row.client ? 'Select project' : 'Select client first'}</option>{projects.map(project => <option key={project.id} value={project.name}>{project.name}</option>)}</select><ChevronDown aria-hidden="true" /></span>;
         }
         if (key === 'drawingNo') {
             const document = drawingDocuments[getBaseDrawingNumber(row[key])];

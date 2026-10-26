@@ -622,6 +622,11 @@ namespace ESSDesign.Server.Models
         public string NewDesignName { get; set; } = string.Empty;
     }
 
+    public class DrawingRegisterFolderMoveRequest : DrawingRegisterFolderResolveRequest
+    {
+        public Guid TargetProjectFolderId { get; set; }
+    }
+
     public class DrawingRegisterFolderMatch
     {
         public Guid FolderId { get; set; }

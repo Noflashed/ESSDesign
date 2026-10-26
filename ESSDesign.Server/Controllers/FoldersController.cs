@@ -1176,6 +1176,30 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPut("drawing-register-folder/move")]
+        public async Task<ActionResult<DrawingRegisterFolderMatch>> MoveDrawingRegisterFolder(
+            [FromBody] DrawingRegisterFolderMoveRequest request)
+        {
+            var access = await RequireDesignManagerAsync();
+            if (access.Error != null) return access.Error;
+            if (request.TargetProjectFolderId == Guid.Empty)
+                return BadRequest(new { error = "The destination project must have an ESS Design directory linked in the Site Registry." });
+
+            try
+            {
+                return Ok(await _supabaseService.MoveDrawingRegisterFolderAsync(request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error moving Drawing Register folder");
+                return StatusCode(500, new { error = "The drawing folder could not be moved to the new project." });
+            }
+        }
+
         [HttpGet("health")]
         public ActionResult Health()
         {

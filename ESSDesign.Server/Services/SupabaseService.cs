@@ -3146,6 +3146,45 @@ namespace ESSDesign.Server.Services
             };
         }
 
+        public async Task<DrawingRegisterFolderMatch> MoveDrawingRegisterFolderAsync(DrawingRegisterFolderMoveRequest request)
+        {
+            var match = await ResolveDrawingRegisterFolderAsync(
+                request.ProjectFolderId, request.DesignName, request.DrawingNumber, includePdfCount: false)
+                ?? throw new InvalidOperationException("The existing ESS Design folder could not be found. Relink the source project before moving this drawing.");
+
+            // Moving the containing folder preserves every revision, attachment, child folder,
+            // document ID and storage key. Storage paths use folder IDs, not project names.
+            var visited = new HashSet<Guid>();
+            Guid? ancestorId = request.TargetProjectFolderId;
+            while (ancestorId.HasValue)
+            {
+                if (ancestorId == match.FolderId || !visited.Add(ancestorId.Value))
+                    throw new InvalidOperationException("A drawing cannot be moved into itself or one of its subfolders.");
+                var ancestor = (await GetRestRowsAsync<DesignFolderOptionRow>(
+                    $"folders?select=id,name,parent_folder_id,updated_at&id=eq.{ancestorId.Value:D}&limit=1")).SingleOrDefault()
+                    ?? throw new InvalidOperationException("The destination ESS Design directory could not be found.");
+                ancestorId = ancestor.ParentFolderId;
+            }
+
+            var siblings = await GetRestRowsAsync<DesignFolderOptionRow>(
+                $"folders?select=id,name,parent_folder_id,updated_at&parent_folder_id=eq.{request.TargetProjectFolderId:D}&limit=1000");
+            if (siblings.Any(folder => folder.Id != match.FolderId
+                && NormalizeDesignFolderName(folder.Name) == NormalizeDesignFolderName(match.FolderName)))
+                throw new InvalidOperationException($"A folder named {match.FolderName} already exists in the destination project.");
+
+            var moved = await PatchRestRowsAsync<DesignFolderOptionRow>(
+                $"folders?id=eq.{match.FolderId:D}",
+                new Dictionary<string, object?>
+                {
+                    ["parent_folder_id"] = request.TargetProjectFolderId,
+                    ["updated_at"] = DateTime.UtcNow
+                }, "return=representation");
+            if (moved.Count != 1)
+                throw new InvalidOperationException("The drawing folder was not moved. Refresh the register and try again.");
+            ClearCache();
+            return match;
+        }
+
         private async Task<int> CountFolderPdfsAsync(Guid folderId)
         {
             var documentsTask = GetRestRowsAsync<DrawingDocumentLookupRow>(

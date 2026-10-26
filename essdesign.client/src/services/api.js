@@ -5335,6 +5335,11 @@ export const foldersAPI = {
         return response.data || null;
     },
 
+    moveDrawingRegisterFolder: async (request) => {
+        const response = await apiClient.put('/folders/drawing-register-folder/move', request);
+        return response.data;
+    },
+
     renameDrawingRegisterFolder: async ({ projectFolderId = null, designName = '', drawingNumber = '', newDesignName = '' } = {}) => {
         const response = await apiClient.put('/folders/drawing-register-folder/rename', {
             projectFolderId,
