@@ -90,6 +90,10 @@ builder.Services.AddScoped<DeliveryAnalysisService>();
 builder.Services.AddScoped<TransportRouteEstimateService>();
 builder.Services.AddScoped<TomTomUsageBudgetService>();
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("DesignUploads", client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(10);
+});
 
 // Configure Resend Email Service (optional - emails are skipped if API key is not set)
 var resendApiKey = builder.Configuration["Resend:ApiKey"];

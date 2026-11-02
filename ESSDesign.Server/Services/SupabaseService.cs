@@ -2248,7 +2248,7 @@ namespace ESSDesign.Server.Services
                 throw new InvalidOperationException("Supabase URL or key not configured.");
             }
 
-            var client = _httpClientFactory.CreateClient();
+            var client = _httpClientFactory.CreateClient("DesignUploads");
             var escapedPath = string.Join(
                 "/",
                 path.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));

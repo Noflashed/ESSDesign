@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { normalizeUploadError } from '../src/services/uploadErrors.js';
+const failure = (status, data, headers = {}) => normalizeUploadError({ response: { status, data, headers } });
+assert.match(failure(413, {error: {message: 'Maximum size exceeded'}}).message, /Maximum size exceeded.*HTTP 413/);
+assert.match(failure(400, {errors: {File: ['PDF required', 'Invalid file']}}).message, /PDF required; Invalid file/);
+assert.match(failure(502, 'ROUTER_EXTERNAL_TARGET_CONNECTION_ERROR').message, /ROUTER_EXTERNAL_TARGET_CONNECTION_ERROR.*HTTP 502/);
+assert.match(failure(413, '<html>proxy error</html>').message, /file-size limit.*HTTP 413/);
+assert.match(failure(500, {error: {code: 'StorageFailure'}}).message, /StorageFailure/);
+assert.equal(failure(403, {}).response.status, 403);
+assert.match(normalizeUploadError({code: 'ECONNABORTED'}).message, /timed out/);
+assert.match(normalizeUploadError({request: {}}).message, /connection failed/);
+assert.doesNotMatch(failure(500, {error: {}}).message, /object Object/);
+console.log('Upload error regression tests passed');

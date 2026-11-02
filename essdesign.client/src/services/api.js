@@ -1,6 +1,7 @@
+import { normalizeUploadError, UPLOAD_TIMEOUT_MS } from './uploadErrors';
 import {resolveScaffoldFormStatus} from '../scaffoldForms/utils/scaffoldFormStatus';
 import axios from 'axios';
-import { API_BASE_URL, API_ORIGIN_URL } from '../config/api';
+import { API_BASE_URL, API_ORIGIN_URL, UPLOAD_API_BASE_URL } from '../config/api';
 import { deleteScaffoldItem } from './scaffoldDeletion';
 import {
     PICKING_CARD_ROWS,
@@ -5155,41 +5156,19 @@ export const foldersAPI = {
         }
 
         try {
-            const response = await axios.post(`${API_BASE_URL}/folders/documents`, formData, {
+            const response = await axios.post(`${UPLOAD_API_BASE_URL}/folders/documents`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                     'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                 },
                 onUploadProgress: options.onUploadProgress,
-                timeout: 120000, // 2 minutes timeout for large files
-                validateStatus: (status) => status < 500 // Don't throw on 4xx errors
+                timeout: UPLOAD_TIMEOUT_MS
             });
 
-            if (response.status >= 400) {
-                throw new Error(response.data?.error || `Upload failed with status ${response.status}`);
-            }
 
             return response.data;
         } catch (error) {
-            // Better error handling for common issues
-            if (error.code === 'ECONNABORTED') {
-                throw new Error('Upload timeout - file may be too large. Please try again.');
-            }
-            if (error.response) {
-                // Server responded with error
-                const contentType = error.response.headers['content-type'];
-                if (contentType && contentType.includes('text/html')) {
-                    // Server returned HTML error page instead of JSON
-                    throw new Error('Server error occurred. Please try again in a moment.');
-                }
-                throw new Error(error.response.data?.error || error.message);
-            }
-            if (error.request) {
-                // Request made but no response
-                throw new Error('No response from server. Please check your connection and try again.');
-            }
-            // Other errors
-            throw new Error(error.message || 'Upload failed. Please try again.');
+            throw normalizeUploadError(error);
         }
     },
 
@@ -5220,37 +5199,20 @@ export const foldersAPI = {
         }
 
         try {
-            const response = await axios.put(`${API_BASE_URL}/folders/documents/${documentId}/replace`, formData, {
+            const response = await axios.put(`${UPLOAD_API_BASE_URL}/folders/documents/${documentId}/replace`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                     'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                 },
                 onUploadProgress: options.onUploadProgress,
-                timeout: 120000,
-                validateStatus: (status) => status < 500
+                timeout: UPLOAD_TIMEOUT_MS
             });
 
-            if (response.status >= 400) {
-                throw new Error(response.data?.error || `Replacement failed with status ${response.status}`);
-            }
 
             window.dispatchEvent(new CustomEvent('ess:document-replaced', {detail: {documentId}}));
             return response.data;
         } catch (error) {
-            if (error.code === 'ECONNABORTED') {
-                throw new Error('Upload timeout while replacing PDF. Please try again.');
-            }
-            if (error.response) {
-                const contentType = error.response.headers['content-type'];
-                if (contentType && contentType.includes('text/html')) {
-                    throw new Error('Server error occurred. Please try again in a moment.');
-                }
-                throw new Error(error.response.data?.error || error.message);
-            }
-            if (error.request) {
-                throw new Error('No response from server. Please check your connection and try again.');
-            }
-            throw new Error(error.message || 'Failed to replace PDF. Please try again.');
+            throw normalizeUploadError(error);
         }
     },
 
