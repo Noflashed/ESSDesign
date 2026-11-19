@@ -50,7 +50,7 @@ const formatDate = (dateString) => {
     });
 };
 
-const formatRevision = (revisionNumber) => `Rev ${String(revisionNumber || '00').padStart(2, '0')}`;
+const formatRevision = (revisionNumber) => `Revision ${String(revisionNumber || '00').padStart(2, '0')}`;
 
 const getDocumentName = (document) => document.displayName || document.essDesignIssueName || document.thirdPartyDesignName || 'Design file';
 

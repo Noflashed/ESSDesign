@@ -105,7 +105,7 @@ export const prefetchNotificationRecipients = () => {
 
 function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     const { showToast, updateToast } = useToast();
-    const [revisionNumber, setRevisionNumber] = useState('01');
+    const [revisionOverride, setRevisionOverride] = useState(null);
     const [drawingStatus, setDrawingStatus] = useState('Construction');
     const [essDesignFile, setEssDesignFile] = useState(null);
     const [description, setDescription] = useState('');
@@ -116,10 +116,17 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     const [recipientsLoading, setRecipientsLoading] = useState(() => !notificationRecipientsCache);
     const [uploading, setUploading] = useState(false);
 
+    const revisionDigits = essDesignFile?.name.match(/\(rev(\d+)\)(?:\.pdf)?$/i)?.[1];
+    const detectedRevision = revisionDigits?.replace(/^0+(?=\d)/, '').padStart(2, '0');
+    const revisionNumber = revisionOverride ?? detectedRevision ?? '01';
     const revisionOptions = Array.from({ length: 20 }, (_, i) => {
         const num = i + 1;
         return num < 10 ? `0${num}` : `${num}`;
     });
+
+    if (detectedRevision && !revisionOptions.includes(detectedRevision)) {
+        revisionOptions.push(detectedRevision);
+    }
 
     const visibleUsers = users.filter((user) => {
         const query = recipientSearch.trim().toLowerCase();
@@ -314,7 +321,10 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                         <input
                             type="file"
                             accept=".pdf"
-                            onChange={(e) => setEssDesignFile(e.target.files[0] || null)}
+                            onChange={(e) => {
+                                setEssDesignFile(e.target.files[0] || null);
+                                setRevisionOverride(null);
+                            }}
                         />
                         <span className="upload-file-drop-content">
                             <UploadDocumentIcon />
@@ -330,7 +340,7 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                             <span>Revision</span>
                             <select
                                 value={revisionNumber}
-                                onChange={(e) => setRevisionNumber(e.target.value)}
+                                onChange={(e) => setRevisionOverride(e.target.value)}
                                 required
                             >
                                 {revisionOptions.map(rev => (

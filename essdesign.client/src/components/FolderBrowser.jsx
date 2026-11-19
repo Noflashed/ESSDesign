@@ -136,11 +136,6 @@ const formatRevisionNumber = (revisionNumber) => {
     return `Revision ${String(revisionNumber).padStart(2, '0')}`;
 };
 
-const formatCompactRevisionNumber = (revisionNumber) => {
-    if (!revisionNumber) return 'Rev 00';
-    return `Rev ${String(revisionNumber).padStart(2, '0')}`;
-};
-
 const DRAWING_STATUS_LABELS = new Set(['Construction', 'Preliminary', 'Concept', 'As-Built']);
 
 const inferDrawingStatusFromDocumentName = (item) => {
@@ -1746,7 +1741,7 @@ function FolderBrowser({
                                                         {item.isDocument ? (
                                                             <>
                                                                 <div className="document-card-badges">
-                                                                    <span className="revision-chip">{formatCompactRevisionNumber(item.revisionNumber)}</span>
+                                                                    <span className="revision-chip">{formatRevisionNumber(item.revisionNumber)}</span>
                                                                     <span className={`drawing-status-chip ${getDrawingStatusClass(item)}`}>{getDrawingStatus(item)}</span>
                                                                     {isLatest && <span className="status-chip latest">Latest</span>}
                                                                 </div>
@@ -1820,7 +1815,7 @@ function FolderBrowser({
                                                         <div className="list-item-revision">
                                                             {item.isDocument ? (
                                                                 <>
-                                                                    <span className="revision-chip">{formatCompactRevisionNumber(item.revisionNumber)}</span>
+                                                                    <span className="revision-chip">{formatRevisionNumber(item.revisionNumber)}</span>
                                                                     {isLatest && <span className="status-chip latest">Latest</span>}
                                                                 </>
                                                             ) : '-'}
@@ -1894,7 +1889,7 @@ function FolderBrowser({
                                     <h3>{getItemDisplayName(selectedPreviewItem)}</h3>
                                     <p>
                                         {selectedPreviewItem.isDocument
-                                            ? `${formatCompactRevisionNumber(selectedPreviewItem.revisionNumber)} - Modified ${formatDate(selectedPreviewItem.updatedAt || selectedPreviewItem.createdAt)}`
+                                            ? `${formatRevisionNumber(selectedPreviewItem.revisionNumber)} - Modified ${formatDate(selectedPreviewItem.updatedAt || selectedPreviewItem.createdAt)}`
                                             : `${getFolderItemCount(selectedPreviewItem)} - Modified ${formatDate(selectedPreviewItem.updatedAt || selectedPreviewItem.createdAt)}`}
                                     </p>
                                 </div>
@@ -1929,7 +1924,7 @@ function FolderBrowser({
                                         <div>
                                             <dt>Revision</dt>
                                             <dd>
-                                                <span className="revision-chip">{formatCompactRevisionNumber(selectedPreviewItem.revisionNumber)}</span>
+                                                <span className="revision-chip">{formatRevisionNumber(selectedPreviewItem.revisionNumber)}</span>
                                                 {Number(selectedPreviewItem.revisionNumber) === latestRevisionNumber && latestRevisionNumber > 0 && (
                                                     <span className="status-chip latest">Latest</span>
                                                 )}
