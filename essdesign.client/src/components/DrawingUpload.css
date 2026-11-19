@@ -1,0 +1,141 @@
+.drawing-upload {
+    box-sizing: border-box;
+    margin: auto;
+    width: min(1080px, calc(100vw - 40px));
+    max-width: none;
+    max-height: calc(100dvh - 32px);
+    padding: 0;
+    border: 1px solid #ccd2da;
+    border-radius: 14px;
+    background: white;
+    color: #161e2c;
+    box-shadow: 0 24px 80px #10182840;
+    overflow: hidden;
+    font-family: inherit;
+}
+.drawing-upload::backdrop { background: rgb(15 23 42 / 62%); }
+.drawing-upload form {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 36px);
+}
+.drawing-header, .drawing-actions, .drawing-file-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.drawing-header { justify-content: space-between; align-items: flex-start; padding: 24px 30px 18px; }
+.drawing-header small { font-weight: 600; color: #475569; }
+.drawing-header h2 { margin: 5px 0 0; font-size: clamp(24px, 3vw, 32px); line-height: 1.15; color: inherit; }
+.drawing-upload button { cursor: pointer; font: inherit; }
+.drawing-header button, .drawing-notify .upload-user-search button {
+    display: grid;
+    place-items: center;
+    padding: 6px;
+    border: 0;
+    border-radius: 4px;
+    color: #475569;
+    background: transparent;
+}
+.drawing-upload :focus-visible { outline: 2px solid #1959c5; outline-offset: 2px; }
+.drawing-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 30px;
+    padding: 5px 30px 22px;
+    overflow-y: auto;
+}
+.drawing-file {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 8px;
+    background: #e5e8ec;
+}
+.drawing-sheet, .drawing-choose {
+    display: grid;
+    place-items: center;
+    flex: 1;
+    min-height: 250px;
+    text-align: center;
+    color: #475569;
+}
+.drawing-sheet canvas {
+    display: block;
+    max-width: 100%;
+    max-height: min(40vh, 370px);
+    width: auto;
+    height: auto;
+    box-shadow: 0 3px 10px #1f29372b;
+}
+.drawing-sheet canvas[hidden] { display: none; }
+.drawing-choose {
+    align-content: center;
+    gap: 10px;
+    border: 1px dashed #96a6bc;
+    border-radius: 6px;
+    background: #f7f9fc;
+    color: #174790;
+}
+.drawing-file-row {
+    min-width: 0;
+    border: 1px solid #c9cfd9;
+    border-radius: 6px;
+    background: #fff;
+    padding: 10px;
+    font-size: 13px;
+}
+.drawing-file-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawing-file-row svg, .drawing-file-row button { flex: none; }
+.drawing-file-row button { margin-left: auto; background: none; border: 0; color: #1349a7; text-decoration: underline; }
+.drawing-fields { display: grid; align-content: start; gap: 22px; min-width: 0; }
+.drawing-fields .upload-meta-grid { align-items: start; }
+.drawing-fields .upload-field > span, .drawing-fields .upload-field-row label {
+    color: #192231;
+    font-size: 15px;
+    font-weight: 650;
+}
+.drawing-fields select, .drawing-fields textarea, .drawing-fields input[type="search"] {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid #aab3bf;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 14px;
+    color: #182332;
+    background-color: white;
+}
+.drawing-fields textarea { min-height: 115px; }
+.drawing-detected { display: flex; align-items: center; gap: 6px; color: #475569; font-size: 12px; }
+.drawing-detected svg { flex: none; color: #147344; }
+.drawing-notify input[type="search"] { padding: 10px 35px; }
+.drawing-notify .upload-user-search button { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
+.drawing-notify .upload-recipient-list { height: auto; max-height: 150px; }
+.drawing-notify .recipient-checkbox { grid-template-columns: 16px 28px minmax(0,1fr) auto; }
+.drawing-actions { flex: none; justify-content: flex-end; padding: 15px 30px; border-top: 1px solid #d7dce2; }
+.drawing-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 10px 18px;
+    border: 1px solid #aab3bf;
+    border-radius: 6px;
+    background: white;
+    color: #182332;
+    font-weight: 600;
+}
+.drawing-actions button[type="submit"] { background: #1045ac; border-color: #1045ac; color: white; }
+.drawing-actions button:disabled { opacity: .5; cursor: default; }
+@media (max-width: 740px) {
+    .drawing-upload { width: calc(100vw - 20px); }
+    .drawing-header, .drawing-actions { padding: 14px 16px; }
+    .drawing-body { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 4px 16px 18px; }
+    .drawing-sheet, .drawing-choose { min-height: 120px; }
+    .drawing-sheet canvas { max-height: 22vh; }
+    .drawing-fields .upload-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+}

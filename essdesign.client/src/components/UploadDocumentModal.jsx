@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { foldersAPI, resolveProfileImageUrl, usersAPI } from '../services/api';
+import { Check, ChevronDown, FileText, Search, Upload, X } from 'lucide-react';
+import './DrawingUpload.css';
 import { useToast } from './Toast';
 
 export const DRAWING_STATUS_OPTIONS = ['Construction', 'Preliminary', 'Concept', 'As-Built'];
@@ -13,15 +15,50 @@ export const inferDrawingStatusFromFileName = (fileName) => {
     return '';
 };
 
-const UploadDocumentIcon = () => (
-    <span className="upload-document-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none">
-            <path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9A2.5 2.5 0 0 0 19 18.5V8l-5-5Z" stroke="currentColor" strokeWidth="1.8" />
-            <path d="M14 3v5h5" stroke="currentColor" strokeWidth="1.8" />
-            <path d="M12 16V9.5m0 0-3 3m3-3 3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-    </span>
-);
+function DrawingPreview({ file }) {
+    const canvasRef = useRef(null);
+    const [status, setStatus] = useState('loading');
+
+    useEffect(() => {
+        let active = true;
+        let loadingTask;
+        setStatus('loading');
+        const url = URL.createObjectURL(file);
+        async function render() {
+            try {
+                const pdfjs = await import('pdfjs-dist/build/pdf.mjs');
+                if (!active) return;
+                pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href;
+                loadingTask = pdfjs.getDocument({ url, isEvalSupported: false });
+                const pdf = await loadingTask.promise;
+                const page = await pdf.getPage(1);
+                if (!active) return;
+                const size = page.getViewport({ scale: 1 });
+                const viewport = page.getViewport({ scale: 1400 / Math.max(size.width, size.height) });
+                const canvas = canvasRef.current;
+                canvas.width = Math.ceil(viewport.width);
+                canvas.height = Math.ceil(viewport.height);
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                if (active) setStatus('ready');
+            } catch {
+                if (active) setStatus('unavailable');
+            }
+        }
+        render();
+        return () => {
+            active = false;
+            loadingTask?.destroy();
+            URL.revokeObjectURL(url);
+        };
+    }, [file]);
+
+    return (
+        <div className="drawing-sheet">
+            <canvas ref={canvasRef} hidden={status !== 'ready'} role="img" aria-label={`First page of ${file.name}`} />
+            {status !== 'ready' && <span role="status">{status === 'loading' ? 'Loading preview�' : 'Preview unavailable for this PDF'}</span>}
+        </div>
+    );
+}
 
 const getUserInitials = (user) => {
     const label = user.fullName || user.email || '';
@@ -114,6 +151,15 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     const [users, setUsers] = useState(() => notificationRecipientsCache || []);
     const [avatarUrls, setAvatarUrls] = useState({});
     const [recipientsLoading, setRecipientsLoading] = useState(() => !notificationRecipientsCache);
+    const dialogRef = useRef(null);
+    const fileInput = useRef(null);
+    const [pickerOpen, setPickerOpen] = useState(false);
+    useEffect(() => {
+        const dialog = dialogRef.current;
+        dialog.showModal();
+        return () => dialog.close();
+    }, []);
+
     const [uploading, setUploading] = useState(false);
 
     const revisionDigits = essDesignFile?.name.match(/\(rev(\d+)\)(?:\.pdf)?$/i)?.[1];
@@ -305,144 +351,150 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     };
 
     return (
-        <div className="modal-overlay" onClick={() => !uploading && onClose()}>
-            <div className="modal upload-modal document-upload-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="document-upload-header">
-                    <div>
-                        <h3>Upload Document</h3>
-                        <p>Add a new ESS Design PDF revision</p>
-                    </div>
-                    <button type="button" className="document-upload-close" onClick={onClose} disabled={uploading} aria-label="Close">
-                        &times;
-                    </button>
-                </div>
-                <form className="document-upload-form" onSubmit={handleSubmit}>
-                    <label className={`upload-file-drop${essDesignFile ? ' has-file' : ''}`}>
-                        <input
-                            type="file"
-                            accept=".pdf"
-                            onChange={(e) => {
-                                setEssDesignFile(e.target.files[0] || null);
+        <dialog ref={dialogRef} className="drawing-upload" aria-labelledby="drawing-upload-title"
+            onCancel={(event) => { event.preventDefault(); onClose(); }}
+            onClick={(event) => { if (event.target === dialogRef.current) onClose(); }}>
+            <form onSubmit={handleSubmit}>
+                <header className="drawing-header">
+                    <div><small>ESS Design</small><h2 id="drawing-upload-title">Upload drawing</h2></div>
+                    <button type="button" onClick={onClose} aria-label="Close"><X size={20} /></button>
+                </header>
+                <div className="drawing-body">
+                    <section className="drawing-file" aria-label="Drawing PDF">
+                        <input ref={fileInput} type="file" accept=".pdf,application/pdf" hidden
+                            onChange={(event) => {
+                                const file = event.target.files[0];
+                                if (!file) return;
+                                setEssDesignFile(file);
                                 setRevisionOverride(null);
-                            }}
-                        />
-                        <span className="upload-file-drop-content">
-                            <UploadDocumentIcon />
-                            <span>
-                                <strong>{essDesignFile ? essDesignFile.name : 'Choose ESS Design PDF'}</strong>
-                                <span className="upload-file-kicker">PDF file</span>
-                            </span>
-                        </span>
-                    </label>
+                                event.target.value = '';
+                            }} />
+                        {essDesignFile ? (
+                            <>
+                                <DrawingPreview file={essDesignFile} />
+                                <div className="drawing-file-row">
+                                    <FileText size={19} aria-hidden="true" />
+                                    <span title={essDesignFile.name}>{essDesignFile.name}</span>
+                                    <button type="button" onClick={() => fileInput.current.click()}>Change file</button>
+                                </div>
+                            </>
+                        ) : (
+                            <button type="button" className="drawing-choose" onClick={() => fileInput.current.click()}>
+                                <Upload size={28} />Choose PDF
+                            </button>
+                        )}
+                    </section>
+                    <div className="drawing-fields">
+                        <div className="upload-meta-grid">
+                            <label className="upload-field">
+                                <span>Revision</span>
+                                <select
+                                    value={revisionNumber}
+                                    onChange={(e) => setRevisionOverride(e.target.value)}
+                                    required
+                                >
+                                    {revisionOptions.map(rev => (
+                                        <option key={rev} value={rev}>
+                                            Revision {rev}
+                                        </option>
+                                    ))}
+                                </select>
+                                {detectedRevision && !revisionOverride && (
+                                    <small className="drawing-detected"><Check size={15} />Detected from filename</small>
+                                )}
+                            </label>
 
-                    <div className="upload-meta-grid">
-                        <label className="upload-field">
-                            <span>Revision</span>
-                            <select
-                                value={revisionNumber}
-                                onChange={(e) => setRevisionOverride(e.target.value)}
-                                required
-                            >
-                                {revisionOptions.map(rev => (
-                                    <option key={rev} value={rev}>
-                                        Revision {rev}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-
-                        <label className="upload-field">
-                            <span>Status</span>
-                            <select
-                                value={drawingStatus}
-                                onChange={(e) => setDrawingStatus(e.target.value)}
-                                required
-                            >
-                                {DRAWING_STATUS_OPTIONS.map(status => (
-                                    <option key={status} value={status}>
-                                        {status}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                    </div>
-
-                    <label className="upload-field">
-                        <span>Change Notes</span>
-                        <textarea
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="- First change&#10;- Second change&#10;- Third change"
-                            rows={4}
-                            className="modal-textarea"
-                        />
-                    </label>
-
-                    <div className="upload-field upload-notify-field">
-                        <div className="upload-field-row">
-                            <span>Notify Users</span>
-                            {selectedRecipients.length > 0 && (
-                                <span className="recipients-count">
-                                    {selectedRecipients.length} selected
-                                </span>
-                            )}
+                            <label className="upload-field">
+                                <span>Drawing status</span>
+                                <select
+                                    value={drawingStatus}
+                                    onChange={(e) => setDrawingStatus(e.target.value)}
+                                    required
+                                >
+                                    {DRAWING_STATUS_OPTIONS.map(status => (
+                                        <option key={status} value={status}>
+                                            {status}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
                         </div>
-                        <div className="upload-user-search">
-                            <span aria-hidden="true">
-                                <svg viewBox="0 0 24 24" fill="none">
-                                    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-                                    <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                </svg>
-                            </span>
-                            <input
-                                type="search"
-                                value={recipientSearch}
-                                onChange={(e) => setRecipientSearch(e.target.value)}
-                                placeholder="Search users"
+
+                        <label className="upload-field">
+                            <span>Change notes</span>
+                            <textarea
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                placeholder="What changed in this revision?"
+                                rows={4}
+                                className="modal-textarea"
                             />
-                        </div>
-                        <div className="recipient-selection upload-recipient-list">
-                            {recipientsLoading ? (
-                                <div className="recipient-loading">Loading users...</div>
-                            ) : visibleUsers.length === 0 ? (
-                                <div className="recipient-loading">No users available</div>
-                            ) : (
-                                visibleUsers.map(user => (
-                                    <label key={user.id} className="recipient-checkbox">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedRecipients.includes(user.id)}
-                                            onChange={(e) => {
-                                                if (e.target.checked) {
-                                                    setSelectedRecipients((prev) => [...prev, user.id]);
-                                                } else {
-                                                    setSelectedRecipients((prev) => prev.filter(id => id !== user.id));
-                                                }
-                                            }}
-                                        />
-                                        <RecipientAvatar user={user} avatarUrls={avatarUrls} />
-                                        <span>
-                                            <strong>{user.fullName || user.email}</strong>
-                                            <small>{user.email}</small>
-                                        </span>
-                                        <span className="recipient-role">{getUserRoleLabel(user)}</span>
-                                    </label>
-                                ))
-                            )}
-                        </div>
-                    </div>
+                        </label>
 
-                    <div className="modal-actions upload-modal-actions">
-                        <button type="button" onClick={onClose} disabled={uploading}>
-                            Cancel
-                        </button>
-                        <button type="submit" disabled={uploading}>
-                            {uploading ? 'Uploading...' : 'Upload Document'}
-                        </button>
+                        <div className="upload-field drawing-notify"
+                            onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPickerOpen(false); }}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Escape' && pickerOpen) {
+                                    event.preventDefault();
+                                    setPickerOpen(false);
+                                    event.currentTarget.querySelector('input[type="search"]').focus();
+                                }
+                            }}>
+                            <div className="upload-field-row">
+                                <label htmlFor="drawing-recipients">Notify users</label>
+                                {selectedRecipients.length > 0 && (
+                                    <span className="recipients-count">
+                                        {selectedRecipients.length} selected
+                                    </span>
+                                )}
+                            </div>
+                            <div className="upload-user-search">
+                                <span aria-hidden="true"><Search /></span>
+                                <input id="drawing-recipients" type="search" value={recipientSearch}
+                                    onFocus={() => setPickerOpen(true)} onClick={() => setPickerOpen(true)}
+                                    onChange={(event) => { setRecipientSearch(event.target.value); setPickerOpen(true); }}
+                                    placeholder="Search by name or email" />
+                                <button type="button" aria-label="Toggle recipient list" aria-expanded={pickerOpen}
+                                    onClick={() => setPickerOpen(!pickerOpen)}><ChevronDown size={16} /></button>
+                            </div>
+                            {pickerOpen && <div className="recipient-selection upload-recipient-list">
+                                {recipientsLoading ? (
+                                    <div className="recipient-loading">Loading users...</div>
+                                ) : visibleUsers.length === 0 ? (
+                                    <div className="recipient-loading">No users available</div>
+                                ) : (
+                                    visibleUsers.map(user => (
+                                        <label key={user.id} className="recipient-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedRecipients.includes(user.id)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedRecipients((prev) => [...prev, user.id]);
+                                                    } else {
+                                                        setSelectedRecipients((prev) => prev.filter(id => id !== user.id));
+                                                    }
+                                                }}
+                                            />
+                                            <RecipientAvatar user={user} avatarUrls={avatarUrls} />
+                                            <span>
+                                                <strong>{user.fullName || user.email}</strong>
+                                                <small>{user.email}</small>
+                                            </span>
+                                            <span className="recipient-role">{getUserRoleLabel(user)}</span>
+                                        </label>
+                                    ))
+                                )}
+                            </div>}
+                        </div>
                     </div>
-                </form>
-            </div>
-        </div>
+                </div>
+                <footer className="drawing-actions">
+                    <button type="button" onClick={onClose}>Cancel</button>
+                    <button type="submit" disabled={uploading || !essDesignFile}><Upload size={17} />Upload PDF</button>
+                </footer>
+            </form>
+        </dialog>
     );
 }
 
