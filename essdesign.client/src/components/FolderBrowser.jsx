@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { foldersAPI, authAPI, usersAPI, rosteringAPI, resolveProfileImageUrl, safetyProjectsAPI, SAFETY_PROJECTS_CHANGED_EVENT } from '../services/api';
-import UploadDocumentModal, { RecipientAvatar, hydrateNotificationRecipients, prefetchNotificationRecipients } from './UploadDocumentModal';
+import UploadDocumentModal, { hydrateNotificationRecipients, prefetchNotificationRecipients } from './UploadDocumentModal';
+import DrawingRecipientPicker from './DrawingRecipientPicker';
+import DrawingDialog from './DrawingDialog';
+import { Send, X } from 'lucide-react';
 import ReplaceDocumentModal from './ReplaceDocumentModal';
 import PDFViewer from './PDFViewer';
 import LoadingBrandmark from './LoadingBrandmark';
@@ -159,12 +162,6 @@ const getItemDisplayName = (item) => (
     item?.isDocument
         ? (item.essDesignIssueName || 'Document')
         : (item?.name || 'Folder')
-);
-
-const getShareUserRoleLabel = (user) => (
-    user?.employeeTitle
-    || user?.EmployeeTitle
-    || (user?.role ? user.role.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()) : '')
 );
 
 const getOwnerLabel = (item) => (
@@ -504,7 +501,7 @@ function PdfPageThumbnail({ documentItem, targetWidth = 280, jpegQuality = 0.58 
             {thumbnailUrl ? (
                 <img src={thumbnailUrl} alt="PDF page 2 preview" />
             ) : (
-                <div className="pdf-thumbnail-state">
+                <div role="status" className={`pdf-thumbnail-state${thumbnailStatus === 'loading' ? ' drawing-loading' : ''}`}>
                     {thumbnailStatus === 'loading' ? 'Rendering preview...' : 'Preview unavailable'}
                 </div>
             )}
@@ -552,7 +549,6 @@ function FolderBrowser({
     const [externalShareRecipients, setExternalShareRecipients] = useState([]);
     const [externalShareInput, setExternalShareInput] = useState('');
     const [externalShareMessage, setExternalShareMessage] = useState('');
-    const [shareUserSearch, setShareUserSearch] = useState('');
     const [loadingShareUsers, setLoadingShareUsers] = useState(false);
     const [sharingDocument, setSharingDocument] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
@@ -1101,7 +1097,6 @@ function FolderBrowser({
         setExternalShareRecipients([]);
         setExternalShareInput('');
         setExternalShareMessage('');
-        setShareUserSearch('');
         setShowShareModal(true);
 
         if (shareUsers.length > 0) {
@@ -1129,18 +1124,11 @@ function FolderBrowser({
         ));
     };
 
-    const visibleShareUsers = useMemo(() => {
-        const query = shareUserSearch.trim().toLowerCase();
-        if (!query) {
-            return shareUsers;
-        }
-
-        return shareUsers.filter(user => (
-            [user.fullName, user.email]
-                .filter(Boolean)
-                .some(value => value.toLowerCase().includes(query))
-        ));
-    }, [shareUsers, shareUserSearch]);
+    const closeShareModal = () => {
+        if (sharingDocument) return;
+        setShowShareModal(false);
+        setShareTarget(null);
+    };
 
     const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     const pendingExternalEmails = externalShareInput
@@ -2182,193 +2170,92 @@ function FolderBrowser({
             )}
 
             {showShareModal && shareTarget && (
-                <div className="modal-overlay" onClick={() => {
-                    if (sharingDocument) return;
-                    setShowShareModal(false);
-                    setShareTarget(null);
-                    setSelectedShareRecipients([]);
-                    setExternalShareRecipients([]);
-                    setExternalShareInput('');
-                    setExternalShareMessage('');
-                    setShareUserSearch('');
-                }}>
-                    <div className="modal upload-modal document-upload-modal share-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="document-upload-header">
-                            <div>
-                                <h3>{shareTarget.isDocument ? 'Share PDF' : 'Share Folder'}</h3>
-                                <p>Send this ESS Design {shareTarget.isDocument ? 'document' : 'folder'} to internal or external recipients</p>
-                            </div>
-                            <button
-                                type="button"
-                                className="document-upload-close"
-                                onClick={() => {
-                                    setShowShareModal(false);
-                                    setShareTarget(null);
-                                    setSelectedShareRecipients([]);
-                                    setExternalShareRecipients([]);
-                                    setExternalShareInput('');
-                                    setExternalShareMessage('');
-                                    setShareUserSearch('');
-                                }}
-                                disabled={sharingDocument}
-                                aria-label="Close"
-                            >
-                                &times;
-                            </button>
-                        </div>
-                        <div className="share-document-form">
-                            <div className="share-document-summary-field">
-                                <span>{shareTarget.isDocument ? 'Document' : 'Folder'}</span>
-                                <div className="share-document-summary">
-                                    <div className="share-document-icon">
-                                        {shareTarget.isDocument ? (
-                                            <PdfPageThumbnail documentItem={shareTarget} targetWidth={120} jpegQuality={0.34} />
-                                        ) : (
-                                            <FolderIcon size={46} color="#5f6368" />
-                                        )}
-                                    </div>
-                                    <div className="share-document-copy">
-                                        <strong>{getItemDisplayName(shareTarget)}</strong>
-                                        <small>
-                                            {shareTarget.isDocument
-                                                ? [formatRevisionNumber(shareTarget.revisionNumber), getDrawingStatus(shareTarget), formatFileSize(shareTarget.totalFileSize)].join(' - ')
-                                                : `${shareTarget.fileCount ?? 'No'} item${shareTarget.fileCount === 1 ? '' : 's'}`}
-                                        </small>
-                                    </div>
+                <DrawingDialog titleId="drawing-share-title" onClose={closeShareModal}>
+                    <form onSubmit={event => { event.preventDefault(); }}>
+                        <header className="drawing-header">
+                            <div><small>ESS Design</small><h2 id="drawing-share-title">{shareTarget.isDocument ? 'Share drawing' : 'Share folder'}</h2></div>
+                            <button type="button" onClick={closeShareModal} disabled={sharingDocument} aria-label="Close"><X size={20} /></button>
+                        </header>
+                        <div className="drawing-body">
+                            <section className="drawing-file drawing-share-file" aria-label="Item to share">
+                                <div className="drawing-sheet">
+                                    {shareTarget.isDocument
+                                        ? <PdfPageThumbnail documentItem={shareTarget} targetWidth={900} jpegQuality={0.8} />
+                                        : <FolderIcon size={80} color="#6987af" />}
                                 </div>
-                            </div>
-                        <div className="share-section share-users-field">
-                            <div className="upload-field-row">
-                                <span>ESS Design users</span>
-                                {selectedShareRecipients.length > 0 && (
-                                    <span className="recipients-count">
-                                        {selectedShareRecipients.length} selected
-                                    </span>
-                                )}
-                            </div>
-                            <div className="upload-user-search">
-                                <span aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" fill="none">
-                                        <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-                                        <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                    </svg>
-                                </span>
-                                <input
-                                    type="search"
-                                    value={shareUserSearch}
-                                    onChange={(e) => setShareUserSearch(e.target.value)}
-                                    placeholder="Search users"
-                                    disabled={sharingDocument}
-                                />
-                            </div>
-                            <div className="share-user-list">
-                                {loadingShareUsers ? (
-                                    <div className="share-empty-state">Loading users...</div>
-                                ) : shareUsers.length === 0 ? (
-                                    <div className="share-empty-state">No users available to share with.</div>
-                                ) : visibleShareUsers.length === 0 ? (
-                                    <div className="share-empty-state">No users match your search.</div>
-                                ) : (
-                                    visibleShareUsers.map(user => (
-                                        <label key={user.id} className="share-user-row">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedShareRecipients.includes(user.id)}
-                                                onChange={() => handleToggleShareRecipient(user.id)}
-                                                disabled={sharingDocument}
-                                            />
-                                            <RecipientAvatar user={user} />
-                                            <span className="share-user-identity">
-                                                <span className="share-user-name">{user.fullName || user.email}</span>
-                                                <span className="share-user-email">{user.email}</span>
+                                <strong>{getItemDisplayName(shareTarget)}</strong>
+                                <small>{shareTarget.isDocument
+                                    ? [formatRevisionNumber(shareTarget.revisionNumber), getDrawingStatus(shareTarget), formatFileSize(shareTarget.totalFileSize)].join(' · ')
+                                    : `${shareTarget.fileCount ?? 0} item${shareTarget.fileCount === 1 ? '' : 's'}`}</small>
+                            </section>
+                            <div className="drawing-fields">
+                                <DrawingRecipientPicker label="ESS Design users" users={shareUsers} selected={selectedShareRecipients}
+                                    onToggle={handleToggleShareRecipient} loading={loadingShareUsers} disabled={sharingDocument} showChips />
+                                <div className="share-section share-external-field">
+                                    <label className="share-section-title" htmlFor="external-share-emails">External recipients</label>
+                                    <div className={`share-recipient-box${invalidExternalInput ? ' invalid' : ''}`}>
+                                        {externalShareRecipients.map(email => (
+                                            <span key={email} className="share-recipient-chip">
+                                                <span className="share-recipient-chip-text">{email}</span>
+                                                <button
+                                                    type="button"
+                                                    className="share-recipient-chip-remove"
+                                                    onClick={() => handleRemoveExternalRecipient(email)}
+                                                    disabled={sharingDocument}
+                                                    aria-label={`Remove ${email}`}
+                                                >
+                                                    &times;
+                                                </button>
                                             </span>
-                                            <span className="share-user-role">{getShareUserRoleLabel(user)}</span>
-                                        </label>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                        <div className="share-section share-external-field">
-                            <label className="share-section-title" htmlFor="external-share-emails">External recipients</label>
-                            <div className={`share-recipient-box${invalidExternalInput ? ' invalid' : ''}`}>
-                                {externalShareRecipients.map(email => (
-                                    <span key={email} className="share-recipient-chip">
-                                        <span className="share-recipient-chip-text">{email}</span>
-                                        <button
-                                            type="button"
-                                            className="share-recipient-chip-remove"
-                                            onClick={() => handleRemoveExternalRecipient(email)}
+                                        ))}
+                                        <input
+                                            id="external-share-emails"
+                                            className="share-recipient-input"
+                                            value={externalShareInput}
+                                            onChange={(e) => setExternalShareInput(e.target.value)}
+                                            onKeyDown={handleExternalInputKeyDown}
+                                            onBlur={() => commitExternalRecipients(externalShareInput)}
+                                            placeholder="Type an email and press Enter"
                                             disabled={sharingDocument}
-                                            aria-label={`Remove ${email}`}
-                                        >
-                                            &times;
-                                        </button>
-                                    </span>
-                                ))}
-                                <input
-                                    id="external-share-emails"
-                                    className="share-recipient-input"
-                                    value={externalShareInput}
-                                    onChange={(e) => setExternalShareInput(e.target.value)}
-                                    onKeyDown={handleExternalInputKeyDown}
-                                    onBlur={() => commitExternalRecipients(externalShareInput)}
-                                    placeholder="Type an email and press Enter"
-                                    disabled={sharingDocument}
-                                />
-                            </div>
-                            <div className="share-helper-text">
-                                {shareTarget.isDocument
-                                    ? 'External recipients receive a direct PDF link and do not need an ESS Design account.'
-                                    : 'External recipients receive a direct folder link and do not need an ESS Design account.'}
-                            </div>
-                            {invalidExternalInput && (
-                                <div className="share-error-text">
-                                    Finish or correct the invalid email address before sharing.
+                                        />
+                                    </div>
+                                    <div className="share-helper-text">
+                                        {shareTarget.isDocument
+                                            ? 'External recipients receive a direct PDF link.'
+                                            : 'External recipients receive a direct folder link.'}
+                                    </div>
+                                    {invalidExternalInput && (
+                                        <div className="share-error-text">
+                                            Finish or correct the invalid email address before sharing.
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
-                        <div className="share-section share-message-field">
-                            <label className="share-section-title" htmlFor="external-share-message">Optional message for external users</label>
-                            <textarea
-                                id="external-share-message"
-                                className="share-external-input"
-                                value={externalShareMessage}
-                                onChange={(e) => setExternalShareMessage(e.target.value)}
-                                placeholder="Please review the attached revision for the Level 12 coordination meeting."
-                                rows={3}
-                                disabled={sharingDocument}
-                            />
-                        </div>
-                        </div>
-                        <div className="modal-actions upload-modal-actions share-modal-actions">
-                            <div className="share-selection-summary">
-                                {selectedShareRecipients.length} internal user{selectedShareRecipients.length === 1 ? '' : 's'} selected, {externalShareRecipients.length + pendingExternalEmails.filter(isValidEmail).length} external recipient{externalShareRecipients.length + pendingExternalEmails.filter(isValidEmail).length === 1 ? '' : 's'} added
+                                <div className="share-section share-message-field">
+                                    <label className="share-section-title" htmlFor="external-share-message">Message for external recipients (optional)</label>
+                                    <textarea
+                                        id="external-share-message"
+                                        className="share-external-input"
+                                        value={externalShareMessage}
+                                        onChange={(e) => setExternalShareMessage(e.target.value)}
+                                        placeholder="Please review the attached revision for the Level 12 coordination meeting."
+                                        rows={3}
+                                        disabled={sharingDocument}
+                                    />
+                                </div>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setShowShareModal(false);
-                                    setShareTarget(null);
-                                    setSelectedShareRecipients([]);
-                                    setExternalShareRecipients([]);
-                                    setExternalShareInput('');
-                                    setExternalShareMessage('');
-                                    setShareUserSearch('');
-                                }}
-                                disabled={sharingDocument}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleShareItem}
-                                disabled={sharingDocument || loadingShareUsers || (totalShareRecipients === 0 && !externalShareInput.trim()) || invalidExternalInput}
-                            >
-                                {sharingDocument ? 'Sharing...' : (shareTarget.isDocument ? 'Share PDF' : 'Share Folder')}
-                            </button>
                         </div>
-                    </div>
-                </div>
+                        <footer className="drawing-actions">
+                            <small className="drawing-share-count">
+                                {selectedShareRecipients.length} internal user{selectedShareRecipients.length === 1 ? '' : 's'} · {totalShareRecipients - selectedShareRecipients.length} external recipient{totalShareRecipients - selectedShareRecipients.length === 1 ? '' : 's'}
+                            </small>
+                            <button type="button" onClick={closeShareModal} disabled={sharingDocument}>Cancel</button>
+                            <button type="button" className="drawing-primary" onClick={handleShareItem}
+                                disabled={sharingDocument || loadingShareUsers || totalShareRecipients === 0 || invalidExternalInput}>
+                                <Send size={16} />{sharingDocument ? 'Sharing…' : (shareTarget.isDocument ? 'Share PDF' : 'Share folder')}
+                            </button>
+                        </footer>
+                    </form>
+                </DrawingDialog>
             )}
             {canUpload && showUploadModal && (
                 <UploadDocumentModal

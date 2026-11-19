@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { foldersAPI, resolveProfileImageUrl, usersAPI } from '../services/api';
-import { Check, ChevronDown, FileText, Search, Upload, X } from 'lucide-react';
-import './DrawingUpload.css';
+import { Check, FileText, Upload, X } from 'lucide-react';
+import DrawingRecipientPicker from './DrawingRecipientPicker';
+import DrawingDialog from './DrawingDialog';
+export { RecipientAvatar } from './DrawingRecipientPicker';
 import { useToast } from './Toast';
 
 export const DRAWING_STATUS_OPTIONS = ['Construction', 'Preliminary', 'Concept', 'As-Built'];
@@ -55,39 +57,14 @@ function DrawingPreview({ file }) {
     return (
         <div className="drawing-sheet">
             <canvas ref={canvasRef} hidden={status !== 'ready'} role="img" aria-label={`First page of ${file.name}`} />
-            {status !== 'ready' && <span role="status">{status === 'loading' ? 'Loading preview�' : 'Preview unavailable for this PDF'}</span>}
+            {status !== 'ready' && <span role="status" className={status === 'loading' ? 'drawing-loading' : undefined}>{status === 'loading' ? 'Loading preview�' : 'Preview unavailable for this PDF'}</span>}
         </div>
     );
 }
 
-const getUserInitials = (user) => {
-    const label = user.fullName || user.email || '';
-    const parts = label.trim().split(/\s+/).filter(Boolean);
-    if (parts.length >= 2) {
-        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return label.slice(0, 2).toUpperCase() || 'U';
-};
-
 export const isTruckDeviceUser = (user) => String(user?.role || '').toLowerCase().startsWith('truck_ess');
 
 const getUserAvatarLookupId = (user) => user.employeeId || user.EmployeeId || user.id;
-
-const getUserRoleLabel = (user) => (
-    user.employeeTitle
-    || user.EmployeeTitle
-    || (user.role ? user.role.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()) : '')
-);
-
-export function RecipientAvatar({ user, avatarUrls }) {
-    const lookupId = getUserAvatarLookupId(user);
-    const avatarUrl = user.resolvedAvatarUrl || user.profileImageUrl || user.avatarUrl || user.AvatarUrl || avatarUrls?.[lookupId] || '';
-    return (
-        <span className={`recipient-avatar${avatarUrl ? ' has-image' : ''}`} aria-hidden="true">
-            {avatarUrl ? <img src={avatarUrl} alt="" /> : getUserInitials(user)}
-        </span>
-    );
-}
 
 let notificationRecipientsCache = null;
 let notificationRecipientsPromise = null;
@@ -146,20 +123,11 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     const [drawingStatus, setDrawingStatus] = useState('Construction');
     const [essDesignFile, setEssDesignFile] = useState(null);
     const [description, setDescription] = useState('');
-    const [recipientSearch, setRecipientSearch] = useState('');
     const [selectedRecipients, setSelectedRecipients] = useState([]);
     const [users, setUsers] = useState(() => notificationRecipientsCache || []);
     const [avatarUrls, setAvatarUrls] = useState({});
     const [recipientsLoading, setRecipientsLoading] = useState(() => !notificationRecipientsCache);
-    const dialogRef = useRef(null);
     const fileInput = useRef(null);
-    const [pickerOpen, setPickerOpen] = useState(false);
-    useEffect(() => {
-        const dialog = dialogRef.current;
-        dialog.showModal();
-        return () => dialog.close();
-    }, []);
-
     const [uploading, setUploading] = useState(false);
 
     const revisionDigits = essDesignFile?.name.match(/\(rev(\d+)\)(?:\.pdf)?$/i)?.[1];
@@ -173,14 +141,6 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     if (detectedRevision && !revisionOptions.includes(detectedRevision)) {
         revisionOptions.push(detectedRevision);
     }
-
-    const visibleUsers = users.filter((user) => {
-        const query = recipientSearch.trim().toLowerCase();
-        if (!query) return true;
-        return [user.fullName, user.email]
-            .filter(Boolean)
-            .some((value) => value.toLowerCase().includes(query));
-    });
 
     useEffect(() => {
         let active = true;
@@ -351,9 +311,7 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     };
 
     return (
-        <dialog ref={dialogRef} className="drawing-upload" aria-labelledby="drawing-upload-title"
-            onCancel={(event) => { event.preventDefault(); onClose(); }}
-            onClick={(event) => { if (event.target === dialogRef.current) onClose(); }}>
+        <DrawingDialog titleId="drawing-upload-title" onClose={onClose}>
             <form onSubmit={handleSubmit}>
                 <header className="drawing-header">
                     <div><small>ESS Design</small><h2 id="drawing-upload-title">Upload drawing</h2></div>
@@ -431,62 +389,9 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                             />
                         </label>
 
-                        <div className="upload-field drawing-notify"
-                            onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPickerOpen(false); }}
-                            onKeyDown={(event) => {
-                                if (event.key === 'Escape' && pickerOpen) {
-                                    event.preventDefault();
-                                    setPickerOpen(false);
-                                    event.currentTarget.querySelector('input[type="search"]').focus();
-                                }
-                            }}>
-                            <div className="upload-field-row">
-                                <label htmlFor="drawing-recipients">Notify users</label>
-                                {selectedRecipients.length > 0 && (
-                                    <span className="recipients-count">
-                                        {selectedRecipients.length} selected
-                                    </span>
-                                )}
-                            </div>
-                            <div className="upload-user-search">
-                                <span aria-hidden="true"><Search /></span>
-                                <input id="drawing-recipients" type="search" value={recipientSearch}
-                                    onFocus={() => setPickerOpen(true)} onClick={() => setPickerOpen(true)}
-                                    onChange={(event) => { setRecipientSearch(event.target.value); setPickerOpen(true); }}
-                                    placeholder="Search by name or email" />
-                                <button type="button" aria-label="Toggle recipient list" aria-expanded={pickerOpen}
-                                    onClick={() => setPickerOpen(!pickerOpen)}><ChevronDown size={16} /></button>
-                            </div>
-                            {pickerOpen && <div className="recipient-selection upload-recipient-list">
-                                {recipientsLoading ? (
-                                    <div className="recipient-loading">Loading users...</div>
-                                ) : visibleUsers.length === 0 ? (
-                                    <div className="recipient-loading">No users available</div>
-                                ) : (
-                                    visibleUsers.map(user => (
-                                        <label key={user.id} className="recipient-checkbox">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedRecipients.includes(user.id)}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) {
-                                                        setSelectedRecipients((prev) => [...prev, user.id]);
-                                                    } else {
-                                                        setSelectedRecipients((prev) => prev.filter(id => id !== user.id));
-                                                    }
-                                                }}
-                                            />
-                                            <RecipientAvatar user={user} avatarUrls={avatarUrls} />
-                                            <span>
-                                                <strong>{user.fullName || user.email}</strong>
-                                                <small>{user.email}</small>
-                                            </span>
-                                            <span className="recipient-role">{getUserRoleLabel(user)}</span>
-                                        </label>
-                                    ))
-                                )}
-                            </div>}
-                        </div>
+                        <DrawingRecipientPicker label="Notify users" users={users} selected={selectedRecipients}
+                            loading={recipientsLoading} avatarUrls={avatarUrls}
+                            onToggle={id => setSelectedRecipients(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id])} />
                     </div>
                 </div>
                 <footer className="drawing-actions">
@@ -494,7 +399,7 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                     <button type="submit" disabled={uploading || !essDesignFile}><Upload size={17} />Upload PDF</button>
                 </footer>
             </form>
-        </dialog>
+        </DrawingDialog>
     );
 }
 
