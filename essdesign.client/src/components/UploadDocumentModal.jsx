@@ -122,6 +122,8 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     const [revisionOverride, setRevisionOverride] = useState(null);
     const [drawingStatus, setDrawingStatus] = useState('Construction');
     const [essDesignFile, setEssDesignFile] = useState(null);
+    const [draggingFile, setDraggingFile] = useState(false);
+    const [fileError, setFileError] = useState('');
     const [description, setDescription] = useState('');
     const [selectedRecipients, setSelectedRecipients] = useState([]);
     const [users, setUsers] = useState(() => notificationRecipientsCache || []);
@@ -203,6 +205,18 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
             setDrawingStatus(inferredStatus);
         }
     }, [essDesignFile]);
+
+    const selectPdf = (files) => {
+        if (!files.length) return;
+        const file = files[0];
+        if (files.length !== 1 || !(file.type === 'application/pdf' || /\.pdf$/i.test(file.name))) {
+            setFileError('Choose one PDF file at a time.');
+            return;
+        }
+        setFileError('');
+        setEssDesignFile(file);
+        setRevisionOverride(null);
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -312,7 +326,23 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
 
     return (
         <DrawingDialog titleId="drawing-upload-title" onClose={onClose}>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit}
+                className={draggingFile ? 'drawing-drag-active' : undefined}
+                onDragOver={event => {
+                    if (!event.dataTransfer.types.includes('Files')) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'copy';
+                    setDraggingFile(true);
+                }}
+                onDragLeave={event => {
+                    if (!event.currentTarget.contains(event.relatedTarget)) setDraggingFile(false);
+                }}
+                onDrop={event => {
+                    if (!event.dataTransfer.types.includes('Files')) return;
+                    event.preventDefault();
+                    setDraggingFile(false);
+                    selectPdf(event.dataTransfer.files);
+                }}>
                 <header className="drawing-header">
                     <div><small>ESS Design</small><h2 id="drawing-upload-title">Upload drawing</h2></div>
                     <button type="button" onClick={onClose} aria-label="Close"><X size={20} /></button>
@@ -321,10 +351,7 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                     <section className="drawing-file" aria-label="Drawing PDF">
                         <input ref={fileInput} type="file" accept=".pdf,application/pdf" hidden
                             onChange={(event) => {
-                                const file = event.target.files[0];
-                                if (!file) return;
-                                setEssDesignFile(file);
-                                setRevisionOverride(null);
+                                selectPdf(event.target.files);
                                 event.target.value = '';
                             }} />
                         {essDesignFile ? (
@@ -338,9 +365,10 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                             </>
                         ) : (
                             <button type="button" className="drawing-choose" onClick={() => fileInput.current.click()}>
-                                <Upload size={28} />Choose PDF
+                                <Upload size={28} />Choose PDF or drop it anywhere in this window
                             </button>
                         )}
+                        {fileError && <span role="alert">{fileError}</span>}
                     </section>
                     <div className="drawing-fields">
                         <div className="upload-meta-grid">

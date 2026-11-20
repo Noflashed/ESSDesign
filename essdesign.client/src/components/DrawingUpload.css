@@ -14,6 +14,7 @@
     font-family: inherit;
 }
 .drawing-upload::backdrop { background: rgb(15 23 42 / 62%); }
+.drawing-drag-active .drawing-file { outline: 2px dashed #1959c5; }
 .drawing-upload form {
     display: flex;
     flex-direction: column;
