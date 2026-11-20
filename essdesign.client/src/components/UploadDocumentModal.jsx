@@ -364,8 +364,8 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                                 </div>
                             </>
                         ) : (
-                            <button type="button" className="drawing-choose" onClick={() => fileInput.current.click()}>
-                                <Upload size={28} />Choose PDF or drop it anywhere in this window
+                            <button type="button" className="drawing-choose" aria-label="Choose PDF" title="Choose PDF or drop it anywhere in this window" onClick={() => fileInput.current.click()}>
+                                <Upload size={28} aria-hidden="true" />
                             </button>
                         )}
                         {fileError && <span role="alert">{fileError}</span>}

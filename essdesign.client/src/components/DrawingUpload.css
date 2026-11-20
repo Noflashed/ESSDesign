@@ -116,7 +116,18 @@
 .drawing-notify input[type="search"] { padding: 10px 35px; }
 .drawing-notify .upload-user-search button { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
 .drawing-notify .upload-recipient-list { height: auto; max-height: 150px; }
-.drawing-notify .recipient-checkbox { grid-template-columns: 16px 28px minmax(0,1fr) auto; }
+.drawing-recipient-check {
+    box-sizing: border-box;
+    width: 16px;
+    height: 16px;
+    place-items: center;
+    border: 1px solid #8391a5;
+    border-radius: 3px;
+    color: white;
+}
+.recipient-checkbox[aria-checked="false"] .drawing-recipient-check svg { visibility: hidden; }
+.recipient-checkbox[aria-checked="true"] .drawing-recipient-check { background: #1959c5; border-color: #1959c5; }
+.drawing-notify .recipient-checkbox { width: 100%; text-align: left; grid-template-columns: 16px 28px minmax(0,1fr) auto; }
 .drawing-actions { flex: none; justify-content: flex-end; padding: 15px 30px; border-top: 1px solid #d7dce2; }
 .drawing-actions button {
     display: inline-flex;

@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronDown, Search, X } from 'lucide-react';
+import { Check, ChevronDown, Search, X } from 'lucide-react';
 
 const getUserInitials = (user) => {
     const label = user.fullName || user.email || '';
@@ -104,12 +104,13 @@ export default function DrawingRecipientPicker({ label, users, selected, onToggl
             {open && <div id={id + '-list'} className="recipient-selection upload-recipient-list" role="group" aria-label={label}>
                 {loading || !matches.length ? <div className="recipient-loading">{loading ? 'Loading users…' : 'No matching users'}</div>
                     : matches.map(user => (
-                        <label key={user.id} className="recipient-checkbox">
-                            <input type="checkbox" checked={selected.includes(user.id)} disabled={disabled} onChange={() => onToggle(user.id)} />
+                        <button key={user.id} type="button" role="checkbox" className="recipient-checkbox"
+                            aria-checked={selected.includes(user.id)} disabled={disabled} onClick={() => onToggle(user.id)}>
+                            <span className="drawing-recipient-check" aria-hidden="true"><Check size={12} /></span>
                             <RecipientAvatar user={user} avatarUrls={avatarUrls} />
                             <span><strong>{user.fullName || user.email}</strong><small>{user.email}</small></span>
                             <span className="recipient-role">{getUserRoleLabel(user)}</span>
-                        </label>
+                        </button>
                     ))}
             </div>}
         </div>
