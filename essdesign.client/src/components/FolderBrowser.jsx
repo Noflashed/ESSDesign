@@ -2190,7 +2190,7 @@ function FolderBrowser({
                             </section>
                             <div className="drawing-fields">
                                 <DrawingRecipientPicker label="ESS Design users" users={shareUsers} selected={selectedShareRecipients}
-                                    onToggle={handleToggleShareRecipient} loading={loadingShareUsers} disabled={sharingDocument} showChips />
+                                    onToggle={handleToggleShareRecipient} loading={loadingShareUsers} disabled={sharingDocument} showChipsWhileOpen />
                                 <div className="share-section share-external-field">
                                     <label className="share-section-title" htmlFor="external-share-emails">External recipients</label>
                                     <div className={`share-recipient-box${invalidExternalInput ? ' invalid' : ''}`}>

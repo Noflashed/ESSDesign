@@ -26,7 +26,7 @@ export function RecipientAvatar({ user, avatarUrls }) {
     );
 }
 
-export default function DrawingRecipientPicker({ label, users, selected, onToggle, loading, disabled, avatarUrls, showChips = false }) {
+export default function DrawingRecipientPicker({ label, users, selected, onToggle, loading, disabled, avatarUrls, showChipsWhileOpen = false }) {
     const [query, setQuery] = useState('');
     const [open, setOpen] = useState(false);
     const root = useRef(null);
@@ -66,6 +66,7 @@ export default function DrawingRecipientPicker({ label, users, selected, onToggl
         return () => document.removeEventListener('pointerdown', outside, true);
     }, [open]);
 
+    const showChips = !open || showChipsWhileOpen;
     const term = query.trim().toLowerCase();
     const matches = users.filter(user => [user.fullName, user.email].some(value => value?.toLowerCase().includes(term)));
     return (
@@ -97,7 +98,7 @@ export default function DrawingRecipientPicker({ label, users, selected, onToggl
                 {users.filter(user => selected.includes(user.id)).map(user => (
                     <button key={user.id} type="button" disabled={disabled} onClick={() => onToggle(user.id)}
                         aria-label={`Remove ${user.fullName || user.email}`}>
-                        <RecipientAvatar user={user} />{user.fullName || user.email}<X size={13} />
+                        <RecipientAvatar user={user} avatarUrls={avatarUrls} />{user.fullName || user.email}<X size={13} />
                     </button>
                 ))}
             </div>}
