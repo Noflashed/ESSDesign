@@ -84,6 +84,7 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpGet("{folderId}")]
+        [KleinScope("design.read")]
         public async Task<ActionResult<FolderResponse>> GetFolder(Guid folderId, [FromQuery] bool refresh = false)
         {
             try
@@ -105,6 +106,7 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpGet("{folderId}/breadcrumbs")]
+        [KleinScope("design.read")]
         public async Task<ActionResult<List<BreadcrumbItem>>> GetBreadcrumbs(Guid folderId)
         {
             try
@@ -233,8 +235,10 @@ namespace ESSDesign.Server.Controllers
 
         [HttpPost("documents")]
         [RequestSizeLimit(1_000_000_000)]
+        [KleinScope("design.write")]
         public async Task<ActionResult> UploadDocument([FromForm] UploadDocumentRequest request)
         {
+            if (KleinIdentity.From(HttpContext) is {} identity && request.RecipientIds?.Count > 0 && !identity.Device.Scopes.Contains("notify")) return StatusCode(403);
             try
             {
                 var adminResult = await RequireDesignContributorAsync();
@@ -441,8 +445,10 @@ namespace ESSDesign.Server.Controllers
 
         [HttpPut("documents/{documentId}/replace")]
         [RequestSizeLimit(1_000_000_000)]
+        [KleinScope("design.write")]
         public async Task<ActionResult> ReplaceDocumentFiles(Guid documentId, [FromForm] ReplaceDocumentFilesRequest request)
         {
+            if (KleinIdentity.From(HttpContext) is {} identity && request.RecipientIds?.Count > 0 && !identity.Device.Scopes.Contains("notify")) return StatusCode(403);
             try
             {
                 var adminResult = await RequireDesignManagerAsync();
@@ -576,6 +582,7 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpPost("documents/{documentId}/share")]
+        [KleinScope("notify")]
         public async Task<ActionResult> ShareDocument(Guid documentId, [FromBody] ShareDocumentRequest request)
         {
             try
@@ -1045,6 +1052,7 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpGet("search")]
+        [KleinScope("design.read")]
         public async Task<ActionResult<List<SearchResult>>> Search([FromQuery] string q)
         {
             try
@@ -1110,6 +1118,7 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpPost("drawing-register-folder/resolve")]
+        [KleinScope("design.read")]
         public async Task<ActionResult<DrawingRegisterFolderMatch?>> ResolveDrawingRegisterFolder(
             [FromBody] DrawingRegisterFolderResolveRequest request)
         {
@@ -1462,6 +1471,7 @@ namespace ESSDesign.Server.Controllers
 
         private async Task<UserInfo?> GetCurrentUserAsync()
         {
+            if (KleinIdentity.From(HttpContext) is {} device) return device.User;
             var authorizationHeader = Request.Headers.Authorization.ToString();
             if (string.IsNullOrWhiteSpace(authorizationHeader) || !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {

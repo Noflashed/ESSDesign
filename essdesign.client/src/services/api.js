@@ -296,6 +296,13 @@ apiClient.interceptors.response.use(
     }
 );
 
+export const kleinAPI = {
+    details: userCode => apiClient.get("/klein/pair/details", { params: { userCode } }),
+    list: () => apiClient.get("/klein/devices"),
+    remove: id => apiClient.delete("/klein/devices/" + id),
+    decide: (approve, userCode, scopes) => apiClient.post("/klein/pair/" + (approve ? "approve" : "deny"), { userCode, scopes }),
+};
+
 export const authAPI = {
     forgotPassword: async (email) => (await apiClient.post('/auth/password/forgot', { email })).data,
     verifyPasswordRecovery: async (tokenHash) => (await apiClient.post('/auth/password/verify', { tokenHash })).data,

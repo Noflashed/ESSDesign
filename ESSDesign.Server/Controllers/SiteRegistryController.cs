@@ -41,6 +41,7 @@ public sealed class SiteRegistryController : ControllerBase
     }
 
     [HttpGet]
+    [KleinScope("design.read")]
     public async Task<ActionResult<JsonElement>> Get(
         [FromQuery] bool includeArchived = true,
         CancellationToken cancellationToken = default)
@@ -67,10 +68,13 @@ public sealed class SiteRegistryController : ControllerBase
     }
 
     [HttpPost("changes")]
+    [KleinScope("register.write")]
     public async Task<ActionResult<JsonElement>> ApplyChange(
         [FromBody] SiteRegistryChangeRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (KleinIdentity.From(HttpContext) != null && request.Operation is not ("upsert_drawing_entry" or "upsert_drawing_entries"))
+            return StatusCode(403);
         var access = await RequireSiteRegistryManagerAsync();
         if (access.Error != null)
         {
@@ -122,6 +126,7 @@ public sealed class SiteRegistryController : ControllerBase
 
     private async Task<UserInfo?> GetCurrentUserAsync()
     {
+            if (KleinIdentity.From(HttpContext) is {} device) return device.User;
         var authorizationHeader = Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorizationHeader)
             || !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))

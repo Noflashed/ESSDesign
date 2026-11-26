@@ -16,8 +16,11 @@ builder.WebHost.ConfigureKestrel(options =>
 
 // Add services to the container
 builder.Services.AddControllers();
+builder.Services.AddScoped<KleinDevices>();
 builder.Services.AddRateLimiter(options =>
 {
+    foreach (var (name, limit) in new[] { ("klein-start", 30), ("klein-poll", 600) })
+        options.AddFixedWindowLimiter(name, policy => { policy.PermitLimit = limit; policy.Window = TimeSpan.FromMinutes(1); });
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     // A global cap also bounds abuse across rotating IP addresses.
     options.AddFixedWindowLimiter("password-recovery", policy =>
@@ -223,6 +226,7 @@ app.UseRouting();
 // CORS (kept as backup for endpoint-level policies)
 app.UseCors("AllowReact");
 app.UseRateLimiter();
+app.Use(KleinDevices.Authenticate);
 
 // Authorization
 app.UseAuthorization();

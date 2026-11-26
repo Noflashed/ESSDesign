@@ -558,6 +558,7 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpGet("notification-recipients")]
+        [KleinScope("design.read")]
         public async Task<ActionResult> GetNotificationRecipients()
         {
             try
@@ -572,6 +573,7 @@ namespace ESSDesign.Server.Controllers
                 var recipients = allUsers
                     .Where(u => AppRoles.NotificationRecipientRoles.Contains(u.Role ?? ""))
                     .ToList();
+                if (KleinIdentity.From(HttpContext) != null) return Ok(recipients.Select(u => new { u.Id, u.FullName, u.Email }));
                 return Ok(recipients);
             }
             catch (Exception ex)
@@ -583,6 +585,7 @@ namespace ESSDesign.Server.Controllers
 
         private async Task<UserInfo?> GetCurrentUserAsync()
         {
+            if (KleinIdentity.From(HttpContext) is {} device) return device.User;
             var authorizationHeader = Request.Headers.Authorization.ToString();
             if (string.IsNullOrWhiteSpace(authorizationHeader) || !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {

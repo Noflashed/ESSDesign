@@ -1,3 +1,4 @@
+import KleinDevices from "./components/KleinDevices";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import FolderBrowser from './components/FolderBrowser';
 import useProfilePhoto from './hooks/useProfilePhoto';
@@ -659,6 +660,10 @@ const summarizeAvatarRecord = (record) => {
 };
 
 function App() {
+    const [kleinLink] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return params.get("page") === "connect-klein" ? { code: params.get("code") || "" } : null;
+    });
     const sharedFolderLink = getSharedFolderLinkFromUrl();
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [user, setUser] = useState(null);
@@ -1651,11 +1656,11 @@ function App() {
 
         if (currentPage === 'profile' || currentPage === 'settings') {
             return (
-                <EmployeeProfilePage
+                <><a href="/?page=connect-klein">Connected devices</a><EmployeeProfilePage
                     user={user}
                     onUserUpdated={handleCurrentUserUpdated}
                     onLogout={handleLogout}
-                />
+                /></>
             );
         }
 
@@ -1847,6 +1852,7 @@ function App() {
         );
     }
 
+    if (isAuthenticated && kleinLink) return <KleinDevices code={kleinLink.code} />;
     if (!isAuthenticated) {
         if (authView === 'signup') {
             return (
@@ -1872,7 +1878,7 @@ function App() {
                 />
             );
         }
-        if (authView === 'login-form') {
+        if (kleinLink || authView === 'login-form') {
             return (
                 <Login
                     onLoginSuccess={handleLoginSuccess}
