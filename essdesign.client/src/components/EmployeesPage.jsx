@@ -511,7 +511,7 @@ function EmployeeAvatar({ entry }) {
     );
 }
 
-export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onOpenLeadingHandRelationships }) {
+export default function EmployeesPage({ employeeContext, onSelectEmployee, currentUserId, onCurrentUserUpdated, onOpenLeadingHandRelationships }) {
     const previewMode = import.meta.env.DEV && new URLSearchParams(window.location.search).get('devAuth') === '1';
     const selectedCredentialImageUrlsRef = useRef(new Map());
     const profilePhotoInputRef = useRef(null);
@@ -808,6 +808,12 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             return;
         }
 
+        if (employeeContext?.employee) {
+            const entry = directoryEntries.find(item => item.employee?.id === employeeContext.employee);
+            setSelectedInfoEntry(entry ?? null);
+            return;
+        }
+
         setSelectedInfoEntry((current) => {
             const refreshedSelection = current
                 ? directoryEntries.find((entry) => entry.key === current.key)
@@ -819,7 +825,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
             return filteredEntries.find((entry) => entry.key === current?.key) || filteredEntries[0];
         });
-    }, [directoryEntries, filteredEntries, loading]);
+    }, [directoryEntries, filteredEntries, loading, employeeContext?.employee]);
 
     const pagedEntries = filteredEntries;
     const activeDirectoryCount = useMemo(
@@ -834,6 +840,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             setError('');
             setInviteMessage('');
         }
+        onSelectEmployee?.(entry.employee?.id ?? null);
         setSelectedInfoEntry(entry);
     };
 
@@ -855,6 +862,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     };
 
     const editEntry = (entry) => {
+        onSelectEmployee?.(entry.employee?.id ?? null);
         setSelectedInfoEntry(entry);
         setProfileEditForm(buildEmployeeProfileForm(entry.appUser));
         setCredentialEditForms(buildEmployeeCredentialForms(selectedCredentials));
@@ -1438,7 +1446,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                         ) : (
                             <main className="employee-profile-main employee-profile-main-empty">
                                 <User size={28} aria-hidden="true" />
-                                <strong>Select an employee</strong>
+                                <strong>{employeeContext?.employee ? 'Employee not found' : 'Select an employee'}</strong>
                                 <span>Choose an employee from the directory to view their profile.</span>
                             </main>
                         )}

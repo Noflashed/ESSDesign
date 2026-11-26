@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { kleinAPI } from '../services/api';
 
 const permissions = {
+    'employees.read': 'Search employee names and roles',
     'design.read': 'Read folders, drawings and recipient names',
     'design.write': 'Upload and replace drawings',
     notify: 'Share drawings and notify recipients',

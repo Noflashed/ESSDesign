@@ -805,6 +805,11 @@ function App() {
             url.searchParams.delete('project');
         }
 
+        if (page === 'employees' && nextEmployeeContext.employee) {
+            url.searchParams.set('employee', nextEmployeeContext.employee);
+        } else {
+            url.searchParams.delete('employee');
+        }
         if (nextEmployeeContext.leadingHand?.id) {
             url.searchParams.set('leadingHand', nextEmployeeContext.leadingHand.id);
         } else {
@@ -1227,6 +1232,11 @@ function App() {
     };
 
     const handleLoginSuccess = () => {
+        if (currentPage === 'employees' && employeeContext.employee) {
+            updateAuthView('landing');
+            checkAuth();
+            return;
+        }
         updateAuthView('landing');
         applyPageState(
             isEmployeePortalRole
@@ -1455,6 +1465,7 @@ function App() {
             project: projectFromUrl ? { id: projectFromUrl } : null
         };
         const initialEmployeeContext = {
+            employee: resolvedPageFromUrl === 'employees' ? urlParams.get('employee') : null,
             leadingHand: leadingHandFromUrl ? { id: leadingHandFromUrl } : null
         };
         const initialRosteringContext = {
@@ -1758,6 +1769,12 @@ function App() {
         if (currentPage === 'employees') {
             return (
                 <EmployeesPage
+                    employeeContext={employeeContext}
+                    onSelectEmployee={(employee) => {
+                        if (employee !== (employeeContext.employee ?? null)) {
+                            applyPageState("employees", safetyContext, { ...employeeContext, employee }, rosteringContext);
+                        }
+                    }}
                     currentUserId={user?.id}
                     onCurrentUserUpdated={setUser}
                     onOpenLeadingHandRelationships={(leadingHand) => applyPageState('employee-relationships', { builder: null, project: null }, { leadingHand })}

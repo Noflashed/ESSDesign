@@ -18,6 +18,7 @@ public class KleinDeviceTests
     [InlineData(typeof(FoldersController),"ReplaceDocumentFiles","design.write")]
     [InlineData(typeof(FoldersController),"ShareDocument","notify")]
     [InlineData(typeof(SiteRegistryController),"ApplyChange","register.write")]
+    [InlineData(typeof(KleinController),"Employees","employees.read")]
     [InlineData(typeof(KleinController),"Approve",null)]
     [InlineData(typeof(KleinController),"Remove",null)]
     public void EndpointsDeclareTheirScope(Type controller, string method, string? scope) =>

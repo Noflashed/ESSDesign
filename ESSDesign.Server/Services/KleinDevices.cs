@@ -20,17 +20,23 @@ public sealed record KleinIdentity(KleinDevice Device, UserInfo User)
 
 public sealed class KleinDevices(IConfiguration config, IHttpClientFactory clients, SupabaseService users)
 {
-    public static readonly string[] AllScopes = ["design.read", "design.write", "notify", "register.write"];
+    public static readonly string[] AllScopes = ["design.read", "design.write", "notify", "register.write", "employees.read"];
     public static string Hash(string value) => WebEncoders.Base64UrlEncode(SHA256.HashData(Encoding.ASCII.GetBytes(value)));
     public static string NewKey() => "essk_" + WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
 
-    public async Task<JsonElement?> Call(string op, object args, CancellationToken ct)
+    public Task<JsonElement?> Call(string op, object args, CancellationToken ct) =>
+        CallRpc("klein_device_request", new { op, args }, ct);
+
+    public Task<JsonElement?> SearchEmployees(string? query, CancellationToken ct) =>
+        CallRpc("klein_employee_search", new { search_name = query ?? string.Empty }, ct);
+
+    private async Task<JsonElement?> CallRpc(string function, object body, CancellationToken ct)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, config["Supabase:Url"]!.TrimEnd('/') + "/rest/v1/rpc/klein_device_request");
+        using var req = new HttpRequestMessage(HttpMethod.Post, config["Supabase:Url"]!.TrimEnd('/') + "/rest/v1/rpc/" + function);
         var key = config["Supabase:ServiceRoleKey"] ?? config["Supabase:Key"];
         req.Headers.Add("apikey", key);
         req.Headers.Authorization = new("Bearer", key);
-        req.Content = JsonContent.Create(new { op, args });
+        req.Content = JsonContent.Create(body);
         using var response = await clients.CreateClient().SendAsync(req, ct);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement?>(cancellationToken: ct);

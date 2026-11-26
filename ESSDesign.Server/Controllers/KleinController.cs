@@ -72,6 +72,13 @@ public sealed class KleinController(KleinDevices devices, SupabaseService users)
     [HttpGet("me"), KleinScope("")]
     public IActionResult Me() => KleinIdentity.From(HttpContext) is {} i ? Ok(Info(i)) : Unauthorized();
 
+    [HttpGet("employees"), KleinScope("employees.read")]
+    public async Task<IActionResult> Employees([FromQuery] string? q)
+    {
+        if (KleinIdentity.From(HttpContext) == null) return Unauthorized();
+        return Ok(await devices.SearchEmployees(q, Ct));
+    }
+
     [HttpGet("devices")]
     public async Task<IActionResult> List()
     {
