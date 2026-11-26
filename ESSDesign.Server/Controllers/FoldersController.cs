@@ -889,6 +889,7 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpGet("documents/{documentId}/download/{type}")]
+        [KleinScope("design.read")]
         public async Task<ActionResult> DownloadDocument(Guid documentId, string type, [FromQuery] bool redirect = false)
         {
             DisableDocumentCaching();
@@ -1079,6 +1080,7 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpGet("drawing-folder")]
+        [KleinScope("design.read")]
         public async Task<ActionResult> FindDrawingFolder([FromQuery] string drawingNumber)
         {
             var currentUser = await GetCurrentUserAsync();

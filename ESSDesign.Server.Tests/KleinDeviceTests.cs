@@ -14,6 +14,8 @@ public class KleinDeviceTests
             KleinDevices.Hash("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"));
 
     [Theory]
+    [InlineData(typeof(FoldersController),nameof(FoldersController.DownloadDocument),"design.read")]
+    [InlineData(typeof(FoldersController),nameof(FoldersController.FindDrawingFolder),"design.read")]
     [InlineData(typeof(FoldersController),"UploadDocument","design.write")]
     [InlineData(typeof(FoldersController),"ReplaceDocumentFiles","design.write")]
     [InlineData(typeof(FoldersController),"ShareDocument","notify")]
